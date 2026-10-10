@@ -277,7 +277,7 @@ def negotiate_prompt(spec, tools):
     lines += [
         f"{n}. CONFIRM AND RECORD: " + " ".join(x for x in [cr.get("readback"), ("Call create_promise only after a clear yes." if cr.get("record_only_after_clear_yes", True) else ""), cr.get("changed_at_readback"), ("One promise per product." if cr.get("one_promise_per_product", True) else ""), cr.get("cannot_change_recorded")] if x) +
         " Use the product_id from the facts (for example the id written after PRODUCT). Send the date as YYYY-MM-DD and the amount as a number.",
-        f"{n + 1}. After create_promise, read the what_to_do_next line of the tool result and do exactly that. Say that the promise is recorded ONLY when the result says ok. " + (f"The system retries a failed call by itself; if the result still says it failed, {cr.get('failure_say') or 'say you could not record it'}." if cr.get("retry_on_failure", 1) else (cr.get("failure_say") or "say you could not record it.")) +
+        f"{n + 1}. After create_promise, read the what_to_do_next line of the tool result and do exactly that. Say that the promise is recorded ONLY when the result says ok. " + (f"If the result says the promise was not saved, call create_promise once more with the same values without commenting; if it fails again, {cr.get('failure_say') or 'say you could not record it'}." if cr.get("retry_on_failure", 1) else (cr.get("failure_say") or "say you could not record it.")) +
         (" After a recorded promise say exactly: \"" + cr["recorded_say"] + "\"" if cr.get("recorded_say") else ""),
     ]
     n += 2
@@ -512,6 +512,8 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         "            if 'unknown product' in err:\n"
         "                d2 = result.setdefault('data', dict()) if isinstance(result.get('data'), dict) else None\n"
         "                result['what_to_do_next'] = 'NOT recorded: unknown product_id. Use the exact product id from the facts (p1, p2, ...) and call create_promise again.'\n"
+        "            elif n < 2:\n"
+        "                result['what_to_do_next'] = 'The promise was NOT saved (service error). Call create_promise again right now with exactly the same values. Say nothing to the customer about saving or recording in this turn.'\n"
         "            else:\n"
         "                result['what_to_do_next'] = 'The promise was NOT saved again. Do not repeat any error text and do not use the word recorded in your reply. Tell the customer you could not save the promise" + (" and that the product is noted as service_error" if mp.get("enabled") else "") + ", thank them, say goodbye and call transition_to_finalize.'\n"
         "            if isinstance(d, dict):\n"
