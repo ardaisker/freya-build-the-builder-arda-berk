@@ -435,7 +435,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         nodes[name] = {
             "name": name, "node_type": "conversation", "on_enter": {"type": "llm", "prompt": "Ask the customer now, in one short sentence: " + (q.get("ask") or "the security question") + " Do not call a tool before the customer answers."},
             "on_enter_first_entry_only": True,
-            "task_message": task, "max_node_turns": 8, "max_turn_transition": "set_declined", "truncation_strategy": "keep_all",
+            "task_message": task, "max_node_turns": 16, "max_turn_transition": "set_declined", "truncation_strategy": "keep_all",
             "extraction_schema": [], "tools": [tool],
             "transitions": [
                 tr("get_account", "all security answers verified", {"logic": "or", "conditions": [
