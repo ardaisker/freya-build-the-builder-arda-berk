@@ -143,7 +143,8 @@ def system_prompt(spec: dict) -> str:
         "Call one tool per message. Do not invent figures, dates, product names or reasons: use only the facts given to you and the tool results.",
         "Customers often talk about unrelated things (their day, the traffic, a wedding, a question back). Do not comment on it. A day or a number the customer mentions for something else is not an answer to your question. Answer a question back in one short sentence, then continue where you were. Repeat a question only if the customer has not answered it yet; if they answered it, act on the answer.",
         "If the customer's message is cut off or only small talk, do not comment on it: restate your pending question or next step in one short sentence. If after two such repeats there is still no answer, continue the procedure as if the customer gave no answer (a non-answer counts as a refusal where the rules say so).",
-        "Say a sympathy sentence at most once in the whole call.",
+        "Never sympathise with small talk (a busy day, traffic, tiredness): do not say 'sorry to hear' about it. A sympathy sentence is said only for a real hardship (illness, a death, job loss), and at most once in the whole call.",
+        "Never ask the same question or make the same offer more than twice in a row. If the customer still has not answered after the second time, treat it as no answer and follow the rules for that.",
     ]
     if o.get("ai_question_answer"):
         lines.append("If asked whether you are a robot or an AI: " + o["ai_question_answer"])
