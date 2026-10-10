@@ -539,35 +539,44 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
                                model_fields=["product_id", "reason"],
                                hooks={"pre_process_code": "try:\n    b = (config or dict()).get('body', dict())\n    vars['notes_log'] = str(vars.get('notes_log') or '') + str(b.get('product_id', '')) + ':' + str(b.get('reason', '')) + ';'\n    if not str(vars.get('promises_log') or ''):\n        nm = " + json.dumps(note_outcomes) + "\n        o = nm.get(str(b.get('reason', '')))\n        if o:\n            vars['outcome'] = o[0]\n            vars['reason'] = o[1]\nexcept Exception:\n    pass\n",
                                       "post_process_code": "try:\n    if isinstance(result, dict):\n        result.pop('header', None)\n        d = result.get('data')\n        if isinstance(d, dict):\n            d['what_to_do_next'] = 'Noted. Continue with the next product, or if all products are handled, thank the customer, say goodbye and call transition_to_finalize.'\nexcept Exception:\n    pass\n"}))
-    nodes["negotiate"] = {
-        "name": "negotiate", "node_type": "conversation", "on_enter": {"type": "llm"},
-        "task_message": negotiate_prompt(spec, T), "max_node_turns": 40, "max_turn_transition": "finalize", "truncation_strategy": "keep_all",
-        "extraction_schema": [
-            {"name": "hardship_flag", "type": "string", "enum_values": ["hardship"], "min_confidence": 0.6,
-             "description": "hardship: the customer mentioned illness, a death in the family, or losing their job. Otherwise leave empty."},
-            {"name": "paid_flag", "type": "string", "enum_values": ["paid"], "min_confidence": 0.6,
-             "description": "paid: the customer says they already paid this past-due amount. Otherwise leave empty."},
-            {"name": "dispute_flag", "type": "string", "enum_values": ["dispute"], "min_confidence": 0.6,
-             "description": "dispute: the customer says the debt is not theirs, they never had this product, or the product was closed or paid off in the past. Otherwise leave empty."},
-            {"name": "customer_date_text", "type": "string", "min_confidence": 0.5,
-             "description": "A payment day the customer named in their LAST message, copied exactly as they said it (for example: this Friday, Monday the 26th, 6 November, the week after next, tomorrow). Leave empty if the last message names no day. Never fill it from earlier messages."},
-        ],
-        "tools": tools,
-        "transitions": [
-            tr("resolve_date", "the customer named a payment day", cond_and({"variable": "customer_date_text", "operator": "is_set"}, {"variable": "customer_date_text", "operator": "not_equals", "operand": "-"})),
-            tr("finalize", "the customer was transferred", {"logic": "or", "conditions": [{"variable": "transfer_to_agent_success_count", "operator": "greater_than", "operand": 0}]}),
-            {"target_node": "finalize", "description": "The call is complete: the goodbye was said after a recorded promise, a refusal, a paid or disputed debt, a hardship case, or a transfer.", "is_tool_call": True,
-             "condition": {"operator": "matches_intent", "description": "The agent has finished the call and said goodbye"}},
-        ],
-    }
-    nodes["resolve_date"] = code_node("resolve_date", snippet("resolve_date", libs=LIBS, SPEC=spec), "negotiate")
-    for flag, case_name, pick in (("hardship", "hardship", "decline_outcome"), ("paid", "already_paid", "outcome"), ("dispute", "dispute", "outcome")):
-        c = cases.get(case_name) or {}
-        o = oc(c.get(pick) or c.get("outcome"))
-        if not o[0]:
-            continue
-        nodes[f"mark_{flag}"] = code_node(f"mark_{flag}", "vars['" + flag + "_marked'] = '1'\nif not str(vars.get('promises_log') or ''):\n    vars['outcome'] = '" + o[0] + "'\n    vars['reason'] = '" + o[1] + "'\n", "negotiate")
-        nodes["negotiate"]["transitions"].insert(0, tr(f"mark_{flag}", f"the customer mentioned {flag}", cond_and({"variable": f"{flag}_flag", "operator": "equals", "operand": flag}, {"variable": f"{flag}_marked", "operator": "is_not_set"})))
+    def negotiate_set(suffix, with_notes):
+        name = "negotiate" + suffix
+        ntools = [t for t in tools if with_notes or t["function"]["name"] != "add_note"]
+        nodes[name] = {
+            "name": name, "node_type": "conversation", "on_enter": {"type": "llm"},
+            "task_message": negotiate_prompt(spec, T) + ("" if with_notes else "\nThere is exactly ONE product in this call: never call add_note (it is not available here) and skip every rule about several products."),
+            "max_node_turns": 40, "max_turn_transition": "finalize", "truncation_strategy": "keep_all",
+            "extraction_schema": [
+                {"name": "hardship_flag", "type": "string", "enum_values": ["hardship"], "min_confidence": 0.6,
+                 "description": "hardship: the customer mentioned illness, a death in the family, or losing their job. Otherwise leave empty."},
+                {"name": "paid_flag", "type": "string", "enum_values": ["paid"], "min_confidence": 0.6,
+                 "description": "paid: the customer says they already paid this past-due amount. Otherwise leave empty."},
+                {"name": "dispute_flag", "type": "string", "enum_values": ["dispute"], "min_confidence": 0.6,
+                 "description": "dispute: the customer says the debt is not theirs, they never had this product, or the product was closed or paid off in the past. Otherwise leave empty."},
+                {"name": "customer_date_text", "type": "string", "min_confidence": 0.5,
+                 "description": "A payment day the customer named in their LAST message, copied exactly as they said it (for example: this Friday, Monday the 26th, 6 November, the week after next, tomorrow). Leave empty if the last message names no day. Never fill it from earlier messages."},
+            ],
+            "tools": ntools,
+            "transitions": [
+                tr("resolve_date" + suffix, "the customer named a payment day", cond_and({"variable": "customer_date_text", "operator": "is_set"}, {"variable": "customer_date_text", "operator": "not_equals", "operand": "-"})),
+                tr("finalize", "the customer was transferred", {"logic": "or", "conditions": [{"variable": "transfer_to_agent_success_count", "operator": "greater_than", "operand": 0}]}),
+                {"target_node": "finalize", "description": "The call is complete: the goodbye was said after a recorded promise, a refusal, a paid or disputed debt, a hardship case, or a transfer.", "is_tool_call": True,
+                 "condition": {"operator": "matches_intent", "description": "The agent has finished the call and said goodbye"}},
+            ],
+        }
+        nodes["resolve_date" + suffix] = code_node("resolve_date" + suffix, snippet("resolve_date", libs=LIBS, SPEC=spec), name)
+        for flag, case_name, pick in (("hardship", "hardship", "decline_outcome"), ("paid", "already_paid", "outcome"), ("dispute", "dispute", "outcome")):
+            c = cases.get(case_name) or {}
+            o = oc(c.get(pick) or c.get("outcome"))
+            if not o[0]:
+                continue
+            nodes[f"mark_{flag}{suffix}"] = code_node(f"mark_{flag}{suffix}", "vars['" + flag + "_marked'] = '1'\nif not str(vars.get('promises_log') or ''):\n    vars['outcome'] = '" + o[0] + "'\n    vars['reason'] = '" + o[1] + "'\n", name)
+            nodes[name]["transitions"].insert(0, tr(f"mark_{flag}{suffix}", f"the customer mentioned {flag}", cond_and({"variable": f"{flag}_flag", "operator": "equals", "operand": flag}, {"variable": f"{flag}_marked", "operator": "is_not_set"})))
+
+    negotiate_set("", False)
+    if "add_note" in T:
+        negotiate_set("_multi", True)
+        nodes["compute_facts"]["transitions"].insert(0, tr("negotiate_multi", "several products", {"logic": "or", "conditions": [{"variable": "product_count", "operator": "greater_than", "operand": 1}]}))
     nodes["finalize"] = code_node("finalize", snippet("finalize", libs=LIBS, SPEC=spec), "end_main")
     nodes["end_main"] = end_node("end_main", None)
 
