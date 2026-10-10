@@ -139,7 +139,7 @@
     "floor_fixed_amount": "number (0 if the floor is not a fixed amount)"
   },
   "persuasion": {
-    "first_ask": "the first question about paying",
+    "first_ask": "the exact spoken first question about paying (spoken words, not an instruction); if the material gives no wording, write the natural question that asks for what the material says to ask first",
     "date_or_amount_is_not_refusal": true,
     "what_counts_as_refusal": "words",
     "attempt_1": "what to propose on attempt 1",
@@ -253,7 +253,7 @@
     "one_promise_per_product": true,
     "cannot_change_recorded": "what to say if they want to change a recorded promise",
     "retry_on_failure": 1,
-    "failure_say": "what to say when recording failed for good",
+    "failure_say": "the exact spoken sentence when recording failed for good (spoken words)",
     "failure_outcome": {
       "outcome": "enum",
       "reason": "enum"

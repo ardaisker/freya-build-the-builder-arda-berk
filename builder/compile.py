@@ -172,22 +172,46 @@ def system_prompt(spec: dict) -> str:
 
 
 def opening_asks(spec):
+    """How many times the agent may ask who is on the line; 0 when the spec does not say."""
     try:
-        return max(1, min(5, int(float((spec.get("opening") or {}).get("max_asks") or 2))))
+        return max(0, min(5, int(float((spec.get("opening") or {}).get("max_asks") or 0))))
     except (TypeError, ValueError):
-        return 2
+        return 0
+
+
+def customer_ref(spec):
+    """The placeholders the brief's own question uses to name the customer, for example {{title}} {{last_name}}."""
+    found = re.findall(r"\{\{\s*\w+\s*\}\}", str((spec.get("opening") or {}).get("confirm_question") or ""))
+    return " ".join(found) if found else "the customer"
+
+
+def looks_like_instruction(text):
+    t = str(text or "").strip().lower()
+    return bool(re.match(r"^(say|tell|state|mention|introduce|ask|offer|propose|do not|don't|never|the agent|first)\b", t)) or not t
 
 
 def opening_prompt(spec):
     o = spec.get("opening") or {}
     asks = opening_asks(spec)
-    lines = ["Your only job in this step is to find out whether the person on the line is the customer, {{title}} {{last_name}}.",
+    who = customer_ref(spec)
+    lines = ["Your only job in this step is to find out whether the person on the line is the customer, " + who + ".",
              o.get("confirmation_rule", ""),
              "Do not say why you are calling. Do not mention " + ", ".join(o.get("forbidden_before_verification") or ["the account"]) + " to anyone before identity is verified.",
-             "If the person asks a question, answer it briefly, then ask again whether you are speaking with {{title}} {{last_name}}.",
-             "Only a clear confirmation counts (yes, that's me, speaking, or the customer's own name). 'Hello', 'go ahead', 'who is this' or silence do not: ask again. You may ask " + str(asks) + " times in total. If answer number " + str(asks) + " is still not a confirmation, say you will call another time, say goodbye, and call transition_to_set_unclear in the same message. Never ask a security question before the confirmation.",
+             "If the person asks a question, answer it briefly, then ask again whether you are speaking with " + who + ".",
+             "Only a clear confirmation counts (yes, that's me, speaking, or the customer's own name). 'Hello', 'go ahead', 'who is this' or silence do not: ask again. " + (("You may ask " + str(asks) + " times in total. If answer number " + str(asks) + " is still not a confirmation") if asks else "Ask as many times as the rule above allows (twice if it does not say). If the last allowed answer is still not a confirmation") + ", say you will call another time, say goodbye, and call transition_to_set_unclear in the same message. Never ask a security question before the confirmation.",
              "If someone else answered, do not explain the call; the next step handles it. Do not call any tool in this step."]
     return "\n".join(x for x in lines if x)
+
+
+def callback_days_text(cb):
+    allowed = str(cb.get("allowed_days") or "today_or_next_business_day")
+    try:
+        n = int(float(cb.get("max_days_ahead") or 1))
+    except (TypeError, ValueError):
+        n = 1
+    today_ok = ("today" in allowed or "any" in allowed) and cb.get("include_today") is not False
+    later = ("the next business day" if n <= 1 or "any" not in allowed else f"one of the next {n} business days") if ("next_business" in allowed or "any" in allowed) else ""
+    return " or ".join(x for x in ["today" if today_ok else "", later] if x) or "a day the rules allow"
 
 
 def third_party_prompt(spec):
@@ -195,7 +219,7 @@ def third_party_prompt(spec):
     cb = t.get("callback") or {}
     lines = ["Someone else answered, not the customer.", t.get("rules", ""), t.get("relative_rule", ""),
              "Say nothing about the reason for the call, the account, any product or amount. If they offer to pay or ask what it is about, say you can only discuss it with the customer.",
-             f"Ask when the customer can be reached. A callback must be {cb.get('allowed_days', 'today or the next business day').replace('_', ' ')}, between {cb.get('from', '')} and {cb.get('to', '')}" + (", and later than now" if cb.get("must_be_after_now", True) else "") + ". You need a day and a time.",
+             "Ask when the customer can be reached. A callback must be " + callback_days_text(cb) + f", between {cb.get('from', '')} and {cb.get('to', '')}" + (", and later than now" if cb.get("must_be_after_now", True) else "") + ". You need a day and a time. The system checks the day and time; if it says the time is not possible" + (", ask once for another time." if cb.get("ask_again_once", True) else ", do not ask again: say you will try another time and say goodbye."),
              "If they say the number does not belong to the customer, say thank you and goodbye.",
              (t.get("deceased") or {}).get("say", "") and ("If they say the customer has died, say exactly: \"" + t["deceased"]["say"] + "\" Ask nothing else and say goodbye."),
              "Callback check from the system (if any): {{tp_verdict}}",
@@ -254,6 +278,13 @@ def mp_settings(spec, tools):
     return mp
 
 
+def failure_text(cr):
+    f = str(cr.get("failure_say") or "").strip()
+    if not f:
+        return "say you could not record it."
+    return (f if looks_like_instruction(f) else "tell the customer: \"" + f.rstrip(".") + ".\"").rstrip(".") + "."
+
+
 def negotiate_prompt(spec, tools):
     ds = spec.get("debt_statement") or {}
     dr = spec.get("date_rules") or {}
@@ -265,23 +296,28 @@ def negotiate_prompt(spec, tools):
     lines = ["The customer is verified and the account was loaded successfully. Facts about the account, computed by the bank's system (authoritative; never say the service failed in this step unless a tool result in this step says so):", "{{facts}}", "",
              "DATE CHECK result for the last day the customer named (if any): {{date_verdict}}", "",
              "PROCEDURE:",
-             "1. If you have not yet stated the debt: " + (ds.get("intro") or "say why you are calling") + " " + (ds.get("state") or "State the past-due amount and how many days late.") + " Name each product exactly as written in the facts." + (" " + ds.get("multi_product_rule", "") if mp.get("enabled") else ""),
-             "2. Then ask: \"" + (pe.get("first_ask") or "Can you make this payment today?") + "\"" + (" (for all products together first)" if mp.get("enabled") and mp.get("ask_all_today_first") else ""),
+             "1. If you have not yet stated the debt (the account is already loaded: do not call get_account): " + (ds.get("intro") or "say why you are calling") + " " + (ds.get("state") or "State the past-due amount and how many days late.") + " Name each product exactly as written in the facts." + (" " + ds.get("multi_product_rule", "") if mp.get("enabled") else ""),
+             ("2. Then: " + str(pe.get("first_ask")) if pe.get("first_ask") and looks_like_instruction(pe.get("first_ask")) else "2. Then ask: \"" + (pe.get("first_ask") or "Can you pay this amount?") + "\"") + (" (for all products together first)" if mp.get("enabled") and mp.get("ask_all_today_first") else ""),
              "3. DATES: " + " ".join(x for x in [dr.get("promise_date"), dr.get("weekend_or_holiday"), dr.get("vague_period"), dr.get("after_deadline"), dr.get("next_weekday")] if x) +
              " Whenever the customer names a day, the system checks it and gives you a DATE CHECK result above: follow it exactly. Never do date arithmetic yourself: use the business-day list, the deadlines and the DATE CHECK.",
-             "4. AMOUNTS: " + " ".join(x for x in [("Ask for the full past-due amount first." if am.get("ask_full_first", True) else ""), ("Never ask how much the customer can pay; you propose every amount." if am.get("never_ask_how_much", True) else ""), am.get("too_much") and ("If the customer says the full amount is too much: " + am["too_much"]), am.get("proposed_in_range") and ("If the customer proposes an amount between the floor and the full amount: " + am["proposed_in_range"]), am.get("below_floor") and ("If the customer proposes less than the floor: " + am["below_floor"])] if x) + " The FLOOR for each product is in the facts. Say the floor amount as an offer exactly ONCE in the whole call; if the customer later asks how much or says 'you tell me', do not announce it again as a new offer: say 'the amount I mentioned' and ask whether they can pay it on the proposed day.",
-             "5. PERSUASION: " + " ".join(x for x in [("A date or an amount the customer proposes is never a refusal." if pe.get("date_or_amount_is_not_refusal", True) else ""), pe.get("what_counts_as_refusal"), "Attempt 1: " + (pe.get("attempt_1") or ""), "Attempt 2: " + (pe.get("attempt_2") or "none"), ("Do not repeat an offer the customer already refused." if pe.get("do_not_repeat_refused_offer", True) else ""), "When the attempts for a product are used up, stop asking for that product."] if x) + " The number of attempts per product is in the facts. Each product's SCRIPT line in the facts gives the exact offers (amount and date) of its attempts: use them exactly, in that order. Offering the deadline (for a date after it) or the next business day (for a weekend or holiday) is NOT a persuasion attempt: attempts start only after a refusal, and attempt 1 always comes before attempt 2. " + ("Once the customer said the full amount is too much, every later proposal is for the FLOOR amount; never propose the full amount again. " if any(str(a.get("amount")) == "full_or_floor_if_too_much" for a in (pe.get("attempts") or []) if isinstance(a, dict)) else "") + "If the customer refuses 'today' without naming a day, make offer 1 of the SCRIPT (that uses attempt 1).",
+             "4. AMOUNTS: " + " ".join(x for x in [("Ask for the full past-due amount first." if am.get("ask_full_first", True) else ""), ("Never ask how much the customer can pay; you propose every amount." if am.get("never_ask_how_much", True) else ""), am.get("too_much") and ("If the customer says the full amount is too much: " + am["too_much"]), am.get("proposed_in_range") and ("If the customer proposes an amount between the floor and the full amount: " + am["proposed_in_range"]), am.get("below_floor") and ("If the customer proposes less than the floor: " + am["below_floor"])] if x) + " The FLOOR for each product is in the facts. Apart from the offers of the SCRIPT, say the floor amount as an offer only ONCE in the whole call; if the customer later asks how much or says 'you tell me', do not announce it again as a new offer: say 'the amount I mentioned' and ask whether they can pay it on the proposed day.",
+             "5. PERSUASION: " + " ".join(x for x in [("A date or an amount the customer proposes is never a refusal." if pe.get("date_or_amount_is_not_refusal", True) else ""), pe.get("what_counts_as_refusal"), "Attempt 1: " + (pe.get("attempt_1") or ""), "Attempt 2: " + (pe.get("attempt_2") or "none"), ("Do not repeat an offer the customer already refused." if pe.get("do_not_repeat_refused_offer", True) else ""), "When the attempts for a product are used up, stop asking for that product."] if x) + " The number of attempts per product is in the facts. Each product's SCRIPT line in the facts gives the exact offers (amount and date) of its attempts: use them exactly, in that order. Offering the deadline (for a date after it) or the next business day (for a weekend or holiday) is NOT a persuasion attempt: attempts start only after a refusal, and attempt 1 always comes before attempt 2. " + ("Once the customer said the full amount is too much, every later proposal is for the FLOOR amount; never propose the full amount again. " if any(str(a.get("amount")) == "full_or_floor_if_too_much" for a in (pe.get("attempts") or []) if isinstance(a, dict)) else "") + "If the customer refuses or gives no answer and names no day and no amount, make offer 1 of the SCRIPT (that uses attempt 1).",
              ]
     n = 6
     for name in ("hardship", "already_paid", "dispute", "restructuring", "human", "refuses_to_talk"):
         c = cases.get(name)
         if not c:
             continue
-        txt = f"{n}. {name.replace('_', ' ').upper()}: when the customer {c.get('trigger', '')}: {c.get('behaviour', '')}"
+        trig = str(c.get("trigger") or "").strip().rstrip(".:")
+        trig = trig[0].lower() + trig[1:] if trig[:1].isupper() and not trig[:2].isupper() else trig
+        beh = str(c.get("behaviour") or "").strip() or "close the call politely: thank the customer, say goodbye and call transition_to_finalize."
+        txt = f"{n}. {name.replace('_', ' ').upper()}: when {trig}: {beh}"
         if c.get("transfer_queue"):
             txt += f" To transfer, call transfer_to_agent with queue \"{c['transfer_queue']}\"" + (" only if the customer accepts" if name == "hardship" else "") + ", then say goodbye."
         if name == "hardship":
-            txt += " This rule comes first: make NO persuasion attempt, propose NO date and NO amount, offer NO other team and NO plan. Offer the support team exactly ONCE in the whole call; if the customer declines it, asks for a discount instead, or does not answer, never mention the support team again. If they decline the support team, say you understand, thank them, say goodbye and call transition_to_finalize. Only if the customer themselves names a date or an amount, record that promise under the date and amount rules."
+            if re.search(r"no (persuasion|reminder|attempt|pressure)|without (persua|press)|not (try to )?persuade", str(c.get("behaviour") or ""), re.I):
+                txt += " This rule comes first: make NO persuasion attempt, propose NO date and NO amount yourself, offer NO other team and NO plan."
+            txt += " Make the offer this rule names exactly ONCE in the whole call; if the customer declines it, asks for something else instead, or does not answer, never mention it again. If they decline, say you understand, thank them, say goodbye and call transition_to_finalize."
         if name == "already_paid":
             txt += " Take no promise. Then thank them, say goodbye and call transition_to_finalize."
         if name == "dispute":
@@ -303,8 +339,8 @@ def negotiate_prompt(spec, tools):
     lines += [
         f"{n}. CONFIRM AND RECORD: " + " ".join(x for x in [cr.get("readback"), ("Call create_promise only after a clear yes." if cr.get("record_only_after_clear_yes", True) else ""), cr.get("changed_at_readback"), ("One promise per product." if cr.get("one_promise_per_product", True) else ""), cr.get("cannot_change_recorded")] if x) +
         " Use the product id from the facts (the id written right after the word PRODUCT), copied exactly. Send the date as YYYY-MM-DD and the amount as a number.",
-        f"{n}b. If the customer asks to change or cancel a promise that is already recorded: " + (cr.get("cannot_change_recorded") or "say a recorded promise cannot be changed in this call") + " Never call create_promise again for it.",
-        f"{n + 1}. After create_promise, read the what_to_do_next line of the tool result and do exactly that. Say that the promise is recorded ONLY when the result says ok. " + (f"If the result says the promise was not saved, call create_promise once more with the same values without commenting; if it fails again, {cr.get('failure_say') or 'say you could not record it'}." if cr.get("retry_on_failure", 1) else (cr.get("failure_say") or "say you could not record it.")) +
+        f"{n}b. If the customer asks to change or cancel a promise that is already recorded: " + (cr.get("cannot_change_recorded") or "say a recorded promise cannot be changed in this call").rstrip(". ") + ". Never call create_promise again for it.",
+        f"{n + 1}. After create_promise, read the what_to_do_next line of the tool result and do exactly that. Say that the promise is recorded ONLY when the result says ok. " + (("If the result says the promise was not saved, call create_promise again with the same values without commenting (" + ("once more" if int(cr.get("retry_on_failure", 1) or 1) == 1 else "up to " + str(int(cr.get("retry_on_failure") or 1)) + " more times") + "); if it still fails: ") if cr.get("retry_on_failure", 1) else "If the result says the promise was not saved: ") + failure_text(cr) +
         (" After a recorded promise say exactly: \"" + cr["recorded_say"] + "\"" if cr.get("recorded_say") else ""),
     ]
     n += 2
@@ -408,7 +444,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         on_enter = {"type": "tts", "text": opening_text}
     nodes["opening"] = {
         "name": "opening", "node_type": "conversation", "on_enter": on_enter, "on_enter_first_entry_only": True,
-        "task_message": opening_prompt(spec), "max_node_turns": 3 * opening_asks(spec), "max_turn_transition": "set_unclear", "truncation_strategy": "keep_all",
+        "task_message": opening_prompt(spec), "max_node_turns": 3 * (opening_asks(spec) or 3), "max_turn_transition": "set_unclear", "truncation_strategy": "keep_all",
         "extraction_schema": [{"name": "who_answered", "type": "string", "enum_values": ["customer", "third_party", "unclear"], "min_confidence": 0.7,
                                "description": "customer: ONLY when the person clearly confirmed they are the customer (yes, that's me, speaking, or said the customer's own name); 'hello', 'go ahead' or 'who is this' are NOT a confirmation. third_party: a different person answered, or the person says the customer is not available, is someone else, has died, or that this is a wrong number. unclear: anything else (hello, who is this, go ahead, a question)."}],
         "tools": [],
