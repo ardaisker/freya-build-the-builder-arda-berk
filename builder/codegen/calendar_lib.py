@@ -78,6 +78,8 @@ def money(x):
 
 def getv(name, default=''):
     v = vars.get(name)
+    if isinstance(v, dict) and 'value' in v and len(v) <= 6:
+        v = v.get('value')
     if v is None:
         return default
     return v

@@ -140,6 +140,8 @@ def test_finalize():
     assert (v["outcome"], v["reason"]) == ("paid", "")
     v = dict(base, notes_log="p1:paid;p2:refused;p3:dispute;"); run("finalize", v)
     assert (v["outcome"], v["reason"]) == ("no_promise", "refused")
+    v = dict(base, notes_log="p1:refused;", hardship_flag={"value": "hardship", "confidence": 0.9, "source": "extraction"}, product_count="1"); run("finalize", v)
+    assert (v["outcome"], v["reason"]) == ("no_promise", "hardship")
     v = dict(base, notes_log="p1:refused;", hardship_flag="hardship", product_count="1"); run("finalize", v)
     assert (v["outcome"], v["reason"]) == ("no_promise", "hardship")
     v = dict(base, promises_log="p1;", notes_log="p2:refused;"); run("finalize", v)

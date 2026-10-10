@@ -142,7 +142,7 @@ def system_prompt(spec: dict) -> str:
         "After every tool result, either speak to the customer or call the next tool. Never end a turn with nothing.",
         "Call one tool per message. Do not invent figures, dates, product names or reasons: use only the facts given to you and the tool results.",
         "Customers often talk about unrelated things (their day, the traffic, a wedding, a question back). Do not comment on it. A day or a number the customer mentions for something else is not an answer to your question. Answer a question back in one short sentence, then continue where you were. Repeat a question only if the customer has not answered it yet; if they answered it, act on the answer.",
-        "If the customer's message stops in the middle of a sentence (cut off), do not repeat your question and do not answer what you guess they meant: say only \"Please go on, I am listening.\" and wait for the rest.",
+        "If the customer's message is cut off or only small talk, do not comment on it: restate your pending question or next step in one short sentence. If after two such repeats there is still no answer, continue the procedure as if the customer gave no answer (a non-answer counts as a refusal where the rules say so).",
         "Say a sympathy sentence at most once in the whole call.",
     ]
     if o.get("ai_question_answer"):
