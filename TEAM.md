@@ -6,7 +6,7 @@ Durum ve sahipler burada. Her commit'te güncellenir. Sunucuda: `cd /root/hackat
 - Boru hattı canlı: Freya anahtarı çalışıyor, kit base-agent 0/10, kit örnek builder (Opus) ~8-9/10 (slot `brief-a`).
 - Bizim derleyici builder: `python3 builder/build.py briefs/brief-a.md tools/openapi.json --cases public-test-set.json --brief A`
   Yol: brief → spec.json (Opus) → compile (sabit topoloji, kod düğümleri) → lint → dry-run → save → smoke → test → patch → export.
-  Brief A: v10 **10/10 iki tekrarda**; stiller (v10/v11): in_words 10, corrects 9, asks_back 9, pieces 9, talkative 9 (v11). Brief B (A+B spec): v8 **3/3 iki tekrarda**; A-spec ajanı B müşterilerinde de 3/3. Kit örneği: düz 10/10, talkative 7/10. Tam build.py provası: sıfırdan 10/10, 186 s. Agent id'ler `out/compiled/*.ids.json`.
+  Brief A: v10/v14 **10/10 iki tekrarda**, v15 10+9; stiller (v10/v11): in_words 10, corrects 9, asks_back 9, pieces 9, talkative 9 (v11). Brief B (A+B spec): v8 **3/3 iki tekrarda**; A-spec ajanı B müşterilerinde de 3/3. Kit örneği: düz 10/10, talkative 7/10. **Dikkat (Cmt 17:00-18:00):** platform modeli yoğunken ajan ilk cümleyi söyleyemiyor, müşteri 80 s sonra kapatıyor → 0/10 görünen koşular platform kaynaklı; `slowest agent turn` uyarısına bak, koşuyu tekrarla. Tam build.py provası: sıfırdan 10/10, 186 s. Agent id'ler `out/compiled/*.ids.json`.
 - Kod düğümleri birim testli: `pytest tests/` (takvim, deadline, tarih sözcükleri, geri arama penceresi, outcome seçimi).
 
 ## Sahipler
