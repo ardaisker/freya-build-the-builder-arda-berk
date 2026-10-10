@@ -321,7 +321,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         on_enter = {"type": "tts", "text": opening_text}
     nodes["opening"] = {
         "name": "opening", "node_type": "conversation", "on_enter": on_enter, "on_enter_first_entry_only": True,
-        "task_message": opening_prompt(spec), "max_node_turns": 3, "max_turn_transition": "set_unclear", "truncation_strategy": "keep_all",
+        "task_message": opening_prompt(spec), "max_node_turns": 6, "max_turn_transition": "set_unclear", "truncation_strategy": "keep_all",
         "extraction_schema": [{"name": "who_answered", "type": "string", "enum_values": ["customer", "third_party", "unclear"], "min_confidence": 0.6,
                                "description": "customer: the person confirmed they are the customer (yes, that's me, speaking, or said the customer's own name). third_party: a different person answered, or the person says the customer is not available, is someone else, has died, or that this is a wrong number. unclear: anything else (hello, who is this, go ahead, a question)."}],
         "tools": [],
