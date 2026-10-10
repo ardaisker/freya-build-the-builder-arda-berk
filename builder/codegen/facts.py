@@ -60,3 +60,10 @@ vars['date_verdict'] = '-'
 vars['customer_date_text'] = '-'
 vars['promises_log'] = getv('promises_log', '')
 vars['notes_log'] = getv('notes_log', '')
+try:
+    eo = (SPEC.get('persuasion') or dict()).get('exhausted_outcome') or dict()
+    if eo.get('outcome'):
+        vars['outcome'] = str(eo.get('outcome'))
+        vars['reason'] = str(eo.get('reason') or '')
+except Exception:
+    pass

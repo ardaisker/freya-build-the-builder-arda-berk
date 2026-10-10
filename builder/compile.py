@@ -421,11 +421,11 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         )
         tool = tool_json(T["verify_identity"], {"customer_id": "{{customer_id}}", "field": str(q.get("field"))},
                          f"Check the customer's answer to this security question. CALL it as soon as the customer gives the answer, with the answer sent as: {q.get('answer_format', '')}. {q.get('notes', '')} Then follow what_to_do_next in the result.".strip(),
-                         hooks={"post_process_code": post})
+                         hooks={"post_process_code": post, "pre_process_code": "try:\n    vars['outcome'] = '" + decl_o[0] + "'\n    vars['reason'] = '" + decl_o[1] + "'\nexcept Exception:\n    pass\n"})
         task = "\n".join(x for x in [
             f"Security question {i + 1} of {len(qs)}: {q.get('ask', '')}",
             f"When the customer answers, call verify_identity with the answer formatted as: {q.get('answer_format', '')}. {q.get('notes', '')}".strip(),
-            "If the answer is complete (for a date: day, month and year; for digits: all the digits asked for), call the tool at once, even if the customer's sentence trailed off or added other words. Only if a piece is missing (half a number, a date without a year), ask for the missing piece first.",
+            "Call the tool with the answer exactly as the customer gave it, at once, even if their sentence trailed off or added other words. Do not ask for 'the rest' of an answer yourself: if something is unreadable the tool result says so and that does not count as wrong. Only when the customer explicitly says they will continue (for example 'the first two digits are four four') wait for the rest.",
             "Then follow the what_to_do_next line of the tool result exactly. Ask only this question; never ask any other security question or invent one.",
             "EVERY answer the customer gives to this question must be sent to verify_identity, including a repeated or corrected answer. Never judge an answer yourself and never skip the tool call.",
             f"A wrong answer may be asked again. {idn.get('max_wrong_total', 3)} wrong answers in total end the check; the tool result tells you how many are left.",
@@ -554,8 +554,9 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
                            lifecycle=["end_of_call"],
                            hooks={"pre_process_code": "try:\n    b = config.get('body')\n    if isinstance(b, dict):\n        if not b.get('reason') or b.get('outcome') in " + json.dumps(sorted(no_reason)) + ":\n            b.pop('reason', None)\nexcept Exception:\n    pass\n"})
 
+    nodes["setup"] = code_node("setup", "vars['outcome'] = '" + uo[0] + "'\nvars['reason'] = '" + uo[1] + "'\nvars['customer_date_text'] = '-'\nvars['date_verdict'] = '-'\nvars['tp_verdict'] = '-'\n", "opening")
     wf = {
-        "initial_node": "opening",
+        "initial_node": "setup",
         "system_prompt": system_prompt(spec),
         "nodes": nodes,
         "global_nodes": {},
