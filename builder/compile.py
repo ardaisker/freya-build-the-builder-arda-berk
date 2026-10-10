@@ -166,6 +166,7 @@ def opening_prompt(spec):
              o.get("confirmation_rule", ""),
              "Do not say why you are calling. Do not mention " + ", ".join(o.get("forbidden_before_verification") or ["the account"]) + " to anyone before identity is verified.",
              "If the person asks a question, answer it briefly, then ask again whether you are speaking with {{title}} {{last_name}}.",
+             "Only a clear confirmation counts (yes, that's me, speaking, or the customer's own name). 'Hello', 'go ahead', 'who is this' or silence do not: ask once more. If the second answer is still not a confirmation, say you will call another time, say goodbye, and call transition_to_set_unclear in the same message. Never ask a security question before the confirmation.",
              "If someone else answered, do not explain the call; the next step handles it. Do not call any tool in this step."]
     return "\n".join(x for x in lines if x)
 
@@ -331,12 +332,14 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
     nodes["opening"] = {
         "name": "opening", "node_type": "conversation", "on_enter": on_enter, "on_enter_first_entry_only": True,
         "task_message": opening_prompt(spec), "max_node_turns": 6, "max_turn_transition": "set_unclear", "truncation_strategy": "keep_all",
-        "extraction_schema": [{"name": "who_answered", "type": "string", "enum_values": ["customer", "third_party", "unclear"], "min_confidence": 0.6,
-                               "description": "customer: the person confirmed they are the customer (yes, that's me, speaking, or said the customer's own name). third_party: a different person answered, or the person says the customer is not available, is someone else, has died, or that this is a wrong number. unclear: anything else (hello, who is this, go ahead, a question)."}],
+        "extraction_schema": [{"name": "who_answered", "type": "string", "enum_values": ["customer", "third_party", "unclear"], "min_confidence": 0.7,
+                               "description": "customer: ONLY when the person clearly confirmed they are the customer (yes, that's me, speaking, or said the customer's own name); 'hello', 'go ahead' or 'who is this' are NOT a confirmation. third_party: a different person answered, or the person says the customer is not available, is someone else, has died, or that this is a wrong number. unclear: anything else (hello, who is this, go ahead, a question)."}],
         "tools": [],
         "transitions": [
             tr("identity_q1", "the customer confirmed their identity", cond_eq("who_answered", "customer")),
             tr("third_party", "someone else answered", cond_eq("who_answered", "third_party")),
+            {"target_node": "set_unclear", "description": "The person did not confirm being the customer after the second ask (answers like hello, go ahead, who is this).", "is_tool_call": True,
+             "condition": {"operator": "matches_intent", "description": "still unclear who is on the line after two asks"}},
         ],
     }
     uo = oc(o.get("unclear_outcome"), ("not_reached", "unclear"))
@@ -499,7 +502,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         "            vars['promises_log'] = str(vars.get('promises_log') or '') + pid + ';'\n"
         "            vars['call_outcome'] = 'promise'\n"
         "            vars['call_reason'] = ''\n"
-        "            d['what_to_do_next'] = 'The promise is recorded. Tell the customer it is recorded" + (" and say exactly: " + recorded_say if recorded_say else "") + ". Then continue with the next product if any, otherwise thank them, say goodbye and call transition_to_finalize in the same message.'\n"
+        "            d['what_to_do_next'] = 'The promise is recorded. Tell the customer it is recorded" + (" and say exactly: " + recorded_say if recorded_say else "") + ". Then continue with the next product if any; otherwise stop and wait for the customer to reply (do not say goodbye yet). In your NEXT message, answer anything they ask, then thank them, say goodbye and call transition_to_finalize.'\n"
         "        else:\n"
         "            err = ''\n"
         "            if isinstance(d, dict):\n"
