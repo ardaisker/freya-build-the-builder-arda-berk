@@ -1,0 +1,12 @@
+env.sh
+.env
+.venv/
+__pycache__/
+*.pyc
+.freya-agents.json
+.personas.json
+results/
+out/
+runs/
+.pytest_cache/
+.DS_Store
