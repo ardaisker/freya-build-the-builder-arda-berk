@@ -140,38 +140,37 @@
  },
  {
   "id": "E04",
-  "base": "PUB-03",
+  "base": "PUB-07",
   "brief": "A",
   "family": "Identity",
   "level": "hard",
   "title": "Day and month swapped, then corrected",
   "variables": {
-   "first_name": "Owen",
-   "last_name": "Park",
+   "first_name": "Samuel",
+   "last_name": "Ortiz",
    "title": "Mr",
    "now": "2026-10-14T11:00"
   },
   "products": [
    {
-    "type": "credit_card",
-    "card_last4": "0377",
-    "past_due": 95.0,
-    "days_late": 4,
-    "minimum_payment": 28.5
+    "type": "personal_loan",
+    "past_due": 540.0,
+    "days_late": 5,
+    "instalment_amount": 180.0
    }
   ],
   "identity": {
-   "date_of_birth": "1992-07-21",
-   "phone_last4": "6630"
+   "date_of_birth": "1975-12-05",
+   "phone_last4": "7093"
   },
-  "script": "Confirms he is Owen Park. Gives his date of birth only as numbers with the month first: '7 21 1992'. When asked to say the month as a word, says '21 July 1992'. Last four digits 6630. Then says he can pay the full amount today and confirms.",
+  "script": "Confirms the name. Gives the date of birth only as numbers with the month first, as '12 5 1975'. When asked to say the month as a word, says '5 December 1975'. Last four digits 7093. Then says the full amount can be paid today and confirms.",
   "expected": {
    "outcome": "promise",
    "reason": null,
    "promises": [
     {
      "product_id": "p1",
-     "amount": 95,
+     "amount": 540.0,
      "date": "2026-10-14"
     }
    ],

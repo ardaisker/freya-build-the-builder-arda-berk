@@ -179,7 +179,7 @@ def third_party_prompt(spec):
              "If they say the number does not belong to the customer, say thank you and goodbye.",
              (t.get("deceased") or {}).get("say", "") and ("If they say the customer has died, say exactly: \"" + t["deceased"]["say"] + "\" Ask nothing else and say goodbye."),
              "Callback check from the system (if any): {{tp_verdict}}",
-             "Do not call any tool in this step."]
+             "You have no close_call tool and must never write a tool call as text. To end the call: if it is a wrong number, say goodbye and call transition_to_set_wrong_number; if the customer has died, say the sentence above and call transition_to_set_deceased; if no callback is possible, call transition_to_set_no_callback; when a day and time are given, the system books the callback and closes the call for you."]
     return "\n".join(x for x in lines if x)
 
 
@@ -277,12 +277,13 @@ def negotiate_prompt(spec, tools):
     lines += [
         f"{n}. CONFIRM AND RECORD: " + " ".join(x for x in [cr.get("readback"), ("Call create_promise only after a clear yes." if cr.get("record_only_after_clear_yes", True) else ""), cr.get("changed_at_readback"), ("One promise per product." if cr.get("one_promise_per_product", True) else ""), cr.get("cannot_change_recorded")] if x) +
         " Use the product_id from the facts (for example the id written after PRODUCT). Send the date as YYYY-MM-DD and the amount as a number.",
+        f"{n}b. If the customer asks to change or cancel a promise that is already recorded: " + (cr.get("cannot_change_recorded") or "say a recorded promise cannot be changed in this call") + " Never call create_promise again for it.",
         f"{n + 1}. After create_promise, read the what_to_do_next line of the tool result and do exactly that. Say that the promise is recorded ONLY when the result says ok. " + (f"If the result says the promise was not saved, call create_promise once more with the same values without commenting; if it fails again, {cr.get('failure_say') or 'say you could not record it'}." if cr.get("retry_on_failure", 1) else (cr.get("failure_say") or "say you could not record it.")) +
         (" After a recorded promise say exactly: \"" + cr["recorded_say"] + "\"" if cr.get("recorded_say") else ""),
     ]
     n += 2
     if mp.get("enabled"):
-        lines.append(f"{n}. IF THERE ARE SEVERAL PRODUCTS (see the facts; with one product skip this rule): " + " ".join(x for x in [mp.get("order"), ("Persuasion attempts are counted per product; start each product at attempt 1. Ask 'today?' ONCE for all products together and NEVER again per product: a question like 'Can you pay this today?' for a single product counts as a wasted attempt. For each product go straight to attempt 1 = its full past-due amount on the ATTEMPT-1 DATE (or the floor if the customer said the full amount is too much); attempt 2, only where allowed, = the floor on that product's deadline. Each product gets EXACTLY the number of attempts written in its facts line (a product with 'attempts allowed: 1' gets attempt 1 only, never attempt 2). After a product's attempts are used up, stop asking about that product, note it, and move to the next product." if mp.get("per_product_attempts", True) else ""), mp.get("one_date_after_a_deadline"), ("Read all promises back together and ask for one confirmation, then call create_promise once per product." if mp.get("one_readback_one_confirmation", True) else ""), (("For each product without a promise call add_note with that product_id and a reason: " + ", ".join(mp.get("note_reasons") or []) + ".") if mp.get("note_products_without_promise", True) else ""), ("A dispute or an already-paid claim on one product does not end the call: note it and continue with the others." if mp.get("dispute_or_paid_does_not_end_call", True) else ""), ("On any transfer add no notes at all." if mp.get("transfer_no_notes", True) else ""), mp.get("promise_failed_twice"), mp.get("closing") and ("The closing outcome is chosen by the system: " + mp["closing"])] if x))
+        lines.append(f"{n}. IF THERE ARE SEVERAL PRODUCTS (see the facts; with one product skip this rule): " + " ".join(x for x in [mp.get("order"), ("Persuasion attempts are counted per product; start each product at attempt 1. Ask 'today?' ONCE for all products together and NEVER again per product: a question like 'Can you pay this today?' for a single product counts as a wasted attempt. For each product go straight to attempt 1 = its full past-due amount on the ATTEMPT-1 DATE (or the floor if the customer said the full amount is too much); attempt 2, only where allowed, = the floor on that product's deadline. Each product gets EXACTLY the number of attempts written in its facts line (a product with 'attempts allowed: 1' gets attempt 1 only, never attempt 2). After a product's attempts are used up, stop asking about that product, note it, and move to the next product." if mp.get("per_product_attempts", True) else ""), mp.get("one_date_after_a_deadline"), ("Read all promises back together and ask for one confirmation, then call create_promise once per product." if mp.get("one_readback_one_confirmation", True) else ""), (("For each product without a promise call add_note with that product_id and a reason: " + ", ".join(mp.get("note_reasons") or []) + ".") if mp.get("note_products_without_promise", True) else ""), ("A dispute or an already-paid claim on one product does not end the call: call add_note for that product (reason dispute or paid) and continue with the others. If the customer says ALL products are already paid or disputed, call add_note once per product before the goodbye." if mp.get("dispute_or_paid_does_not_end_call", True) else ""), ("On any transfer add no notes at all." if mp.get("transfer_no_notes", True) else ""), mp.get("promise_failed_twice"), mp.get("closing") and ("The closing outcome is chosen by the system: " + mp["closing"])] if x))
         n += 1
     cl = spec.get("closing") or {}
     lines += [
@@ -359,6 +360,12 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
             tr("set_deceased", "the customer has died", cond_eq("tp_result", "deceased")),
             tr("tp_resolve", "a callback day or time was named", cond_eq("tp_result", "callback_time_given")),
             tr("set_no_callback", "no callback possible", cond_eq("tp_result", "no_callback")),
+            {"target_node": "set_wrong_number", "description": "The person says this number does not belong to the customer or they do not know the customer.", "is_tool_call": True,
+             "condition": {"operator": "matches_intent", "description": "wrong number"}},
+            {"target_node": "set_deceased", "description": "The person says the customer has died.", "is_tool_call": True,
+             "condition": {"operator": "matches_intent", "description": "the customer has died"}},
+            {"target_node": "set_no_callback", "description": "The person refuses to give any time or says the customer cannot be reached at all.", "is_tool_call": True,
+             "condition": {"operator": "matches_intent", "description": "no callback possible"}},
         ],
     }
     nodes["tp_resolve"] = code_node("tp_resolve", snippet("tp_resolve", libs=LIBS, SPEC=spec), "set_no_callback", [
@@ -387,7 +394,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
     hint_actions = {h.get("hint"): h.get("action") for h in idn.get("hints") or []}
     verified_say = (idn.get("verified_say") or "Thank you, that's verified.").replace("'", "")
     d = idn.get("decline") or {}
-    decline_rule = ("If the customer does not want to answer: " + (d.get("explain_once") or "explain once that the questions protect their account.") +
+    decline_rule = ("If the customer does not want to answer or asks what the call is about instead of answering: say once, in these words, 'These questions protect your account.' then ask the question again. (" + (d.get("explain_once") or "explain once that the questions protect their account") + ")" +
                     (" Asking what the call is about instead of answering counts as declining." if d.get("asking_why_counts_as_decline") else "") +
                     " On the SECOND refusal, say that you cannot continue without the security check, say goodbye, and in the same message call transition_to_set_declined. Never call it on a first refusal and never when the customer gave an answer.")
     fail_o = oc((idn.get("fail") or {}).get("outcome"), ("not_verified", "failed"))
