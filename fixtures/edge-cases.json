@@ -1158,7 +1158,8 @@
    "transfers": []
   },
   "checks": [
-   "the credit card gets exactly one attempt (early band)",
+   "the single question whether all products can be paid today is not a persuasion attempt",
+   "after that, the credit card (early band) gets exactly one offer and then a refused note, no second offer",
    "the loan floor 300 is offered once",
    "exactly one promise, on the loan"
   ]
