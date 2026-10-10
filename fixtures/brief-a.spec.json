@@ -1,11 +1,12 @@
 {
+ "_doc": "Policy spec for Freya Bank Brief A: early-stage collections, one product.",
  "bank_name": "Freya Bank",
  "agent_self_name": "digital assistant",
  "language": "English",
  "opening": {
-  "first_sentence": "Say you are a digital assistant calling from Freya Bank, and that the call is recorded. Say nothing else about the purpose.",
+  "first_sentence": "Hello, this is the digital assistant calling from Freya Bank. We record this call.",
   "confirm_question": "Am I speaking with {{title}} {{last_name}}?",
-  "confirmation_rule": "Only \"yes\", \"that's me\", \"speaking\" or the customer's own name counts as confirmation. \"Hello\", \"go ahead\" and \"who is this\" do not. Ask once more. If still unclear after the second ask, close as not_reached / unclear. Answer a question from the customer first (robot/AI, scam); the ask that follows is the second ask.",
+  "confirmation_rule": "Only \"yes\", \"that's me\", \"speaking\" or the customer's own name counts as confirmation. \"Hello\", \"go ahead\" and \"who is this\" do not. Ask once more. If it is still unclear after the second ask, close as not_reached / unclear. Answer a question from the customer first (robot/AI, scam); the ask that follows is the second ask.",
   "forbidden_before_verification": [
    "collections",
    "debt",
@@ -14,15 +15,15 @@
    "the reason for the call",
    "anything about the account"
   ],
-  "ai_question_answer": "Say that you are Freya Bank's digital assistant and continue.",
-  "scam_question_answer": "Say they can verify the call by phoning Freya Bank's customer service number, and continue.",
+  "ai_question_answer": "I am Freya Bank's digital assistant.",
+  "scam_question_answer": "You can verify this call by phoning Freya Bank's customer service number.",
   "unclear_outcome": {
    "outcome": "not_reached",
    "reason": "unclear"
   }
  },
  "third_party": {
-  "rules": "Do not say why you are calling. Say nothing beyond the opening sentence (digital assistant, Freya Bank, call is recorded). Ask when the customer can be reached. Do not say \"collections\", \"debt\", \"payment\" or the product, also to relatives.",
+  "rules": "Do not say why you are calling. Say nothing beyond the opening sentence (digital assistant from Freya Bank, call is recorded). Ask when the customer can be reached.",
   "callback": {
    "allowed_days": "today_or_next_business_day",
    "max_days_ahead": 1,
@@ -64,7 +65,7 @@
     "field": "phone_last4",
     "ask": "Ask for the last four digits of the phone number on file.",
     "answer_format": "four digits",
-    "notes": "Ask only after the date of birth; one question at a time."
+    "notes": "Ask only after the date of birth has passed. One question at a time."
    }
   ],
   "max_wrong_total": 3,
@@ -72,11 +73,11 @@
   "hints": [
    {
     "hint": "day_month_swapped",
-    "action": "Ask the customer to say the month as a word, then retry. That retry does not count as a wrong answer."
+    "action": "Ask the customer to say the month as a word. That retry does not count as a wrong answer."
    }
   ],
   "fail": {
-   "say": "Do not state the debt. Tell the customer to use the mobile app or a branch.",
+   "say": "After three wrong answers, do not state the debt. Tell the customer to use the mobile app or a branch.",
    "outcome": {
     "outcome": "not_verified",
     "reason": "failed"
@@ -90,10 +91,10 @@
     "reason": "declined"
    }
   },
-  "verified_say": ""
+  "verified_say": "Thank you, your identity is confirmed."
  },
  "debt_statement": {
-  "intro": "After both questions pass, call get_account. Then say that you are calling from the collections team about a late payment.",
+  "intro": "Say that you are calling from the collections team about a late payment.",
   "product_wording": {
    "credit_card": "credit card ending {card_last4}",
    "personal_loan": "personal loan",
@@ -126,6 +127,7 @@
    "days_late_min": 1,
    "days_late_max": 7,
    "deadline_business_days_after_today": 12,
+   "deadline_rule": "",
    "persuasion_attempts": 1
   },
   {
@@ -133,15 +135,19 @@
    "days_late_min": 8,
    "days_late_max": 45,
    "deadline_business_days_after_today": 7,
+   "deadline_rule": "",
    "persuasion_attempts": 2
   }
  ],
  "date_rules": {
-  "promise_date": "A promise date must be today or later, a business day, and not after the deadline. All date rules use `now`, never the real clock.",
-  "weekend_or_holiday": "If the customer names a weekend day or a holiday that is not after the deadline, offer the next business day. If the named day is after the deadline, apply the after-deadline rule.",
-  "vague_period": "If the customer gives a vague period (\"next week\", \"end of the month\", \"when my salary comes\"), ask once for the exact day. If they still give none, propose the deadline.",
+  "promise_date": "A promise date must be today or later, a business day, and not after the deadline.",
+  "weekend_or_holiday": "If the customer names a weekend day or a holiday that is not after the deadline, offer the next business day. If the named day is after the deadline, the after-deadline rule applies.",
+  "vague_period": "For a vague period (\"next week\", \"end of the month\", \"when my salary comes\"), ask once for the exact day. If they still give none, propose the deadline.",
   "after_deadline": "Say the latest date you can record is the deadline and offer it. If the customer refuses the deadline, treat it as a flat refusal (uses one persuasion attempt).",
-  "next_weekday": "\"Next <weekday>\" means that weekday in the following calendar week. \"This <weekday>\" means the one in the current week. \"Next Friday\" said on a Friday is the Friday of the following week."
+  "next_weekday": "\"Next <weekday>\" means that weekday in the following calendar week. \"This <weekday>\" means the one in the current week. \"Next Friday\" said on a Friday is the Friday of the following week.",
+  "non_business_day_roll": "next",
+  "after_deadline_refusal": "persuasion",
+  "vague_fallback": "deadline"
  },
  "amounts": {
   "floor_by_type": {
@@ -151,27 +157,52 @@
   },
   "ask_full_first": true,
   "never_ask_how_much": true,
-  "too_much": "Offer the floor, once. Say that the rest stays overdue. If the customer refuses the floor, treat it as a flat refusal (uses one persuasion attempt). Attempt 2 may name the floor again, on the deadline.",
+  "too_much": "Offer the floor, once. Say that the rest stays overdue. If the customer refuses the floor, treat it as a flat refusal (persuasion). Attempt 2 may name the floor again, on the deadline.",
   "proposed_in_range": "Accept any amount from the floor up to the full past-due amount, both included.",
-  "below_floor": "Say it cannot be recorded and offer the floor once. If the customer does not accept the floor, treat it as a flat refusal (uses one persuasion attempt)."
+  "below_floor": "Say it cannot be recorded and offer the floor once. If the customer does not accept the floor, treat it as a flat refusal (persuasion).",
+  "floor_percent_of_past_due": 0,
+  "floor_fixed_amount": 0
  },
  "persuasion": {
   "first_ask": "Can you make this payment today?",
   "date_or_amount_is_not_refusal": true,
-  "what_counts_as_refusal": "A flat refusal or a non-answer. A no to paying today with no date and no amount is a flat refusal. Also: refusing the deadline, refusing the floor, not accepting the floor after a below-floor proposal. Each uses one persuasion attempt.",
-  "attempt_1": "Propose the last business day of this week; if today is that day, propose the last business day of next week. Amount: the full past-due amount, or the floor if the customer already said the full amount is too much.",
-  "attempt_2": "Late band only (8 to 45 days late): propose the floor amount on the deadline.",
+  "what_counts_as_refusal": "A flat refusal or a non-answer. A no to paying today with no date and no amount is a flat refusal. Refusing the offered deadline, refusing the floor, or not accepting the floor after a below-floor proposal also count as a flat refusal. Each uses one persuasion attempt.",
+  "attempt_1": "Propose the full past-due amount (or the floor if the customer already said the full amount is too much) on the last business day of this week. If today is that day, propose the last business day of next week.",
+  "attempt_2": "Late band only: propose the floor amount on the deadline.",
   "exhausted_outcome": {
    "outcome": "no_promise",
    "reason": "refused"
   },
-  "do_not_repeat_refused_offer": true
+  "do_not_repeat_refused_offer": true,
+  "attempts": [
+   {
+    "n": 1,
+    "amount": "full_or_floor_if_too_much",
+    "date_rule": {
+     "type": "last_business_day_of_week",
+     "week": 0,
+     "if_today_use_next_week": true
+    },
+    "bands": "all"
+   },
+   {
+    "n": 2,
+    "amount": "floor",
+    "date_rule": {
+     "type": "deadline"
+    },
+    "bands": [
+     "late"
+    ]
+   }
+  ],
+  "_attempts_doc": "attempts: one entry per persuasion attempt the material defines, in order."
  },
  "special_cases": [
   {
    "name": "hardship",
    "trigger": "The customer mentions illness, a death in the family or job loss.",
-   "behaviour": "Say one short sentence of sympathy and make no persuasion attempt. Offer to connect them with the customer support team. If they accept, call transfer_to_agent with queue support. This rule comes before the persuasion rule and the restructuring rule. If the customer still names a date or an amount themselves, record the promise under the date and amount rules.",
+   "behaviour": "Say one short sentence of sympathy and make no persuasion attempt. Offer to connect them with the customer support team. This comes before persuasion and before the restructuring rule. If the customer still names a date or an amount themselves, record the promise under the date and amount rules.",
    "transfer_queue": "support",
    "accept_outcome": {
     "outcome": "transferred",
@@ -206,7 +237,7 @@
   {
    "name": "restructuring",
    "trigger": "A request for a new payment plan or lower instalments.",
-   "behaviour": "Do not describe a plan. Call transfer_to_agent with queue restructuring and close. Hardship rule takes precedence over this one.",
+   "behaviour": "Do not describe a plan. Call transfer_to_agent with queue restructuring and close.",
    "transfer_queue": "restructuring",
    "outcome": {
     "outcome": "transferred",
@@ -260,17 +291,6 @@
     "reason": ""
    },
    "note_reason": ""
-  },
-  {
-   "name": "change_recorded_promise",
-   "trigger": "The customer asks to change or cancel a promise already recorded in this call.",
-   "behaviour": "A recorded promise cannot be changed or cancelled in the same call. Say they can change it in the mobile app.",
-   "transfer_queue": "",
-   "outcome": {
-    "outcome": "",
-    "reason": ""
-   },
-   "note_reason": ""
   }
  ],
  "forbidden_offers": [
@@ -285,14 +305,14 @@
   "record_only_after_clear_yes": true,
   "changed_at_readback": "Check the new date or amount against the date and amount rules and read it back again.",
   "one_promise_per_product": true,
-  "cannot_change_recorded": "Say a recorded promise cannot be changed or cancelled in this call; they can change it in the mobile app.",
+  "cannot_change_recorded": "A recorded promise cannot be changed or cancelled in the same call. Say they can change it in the mobile app.",
   "retry_on_failure": 1,
   "failure_say": "Say you could not record the promise.",
   "failure_outcome": {
    "outcome": "no_promise",
    "reason": "service_error"
   },
-  "recorded_say": "You will receive a text message confirming this promise."
+  "recorded_say": "Your promise is recorded. You will receive a text message confirming this promise."
  },
  "multi_product": {
   "enabled": false,
@@ -306,127 +326,182 @@
   "dispute_or_paid_does_not_end_call": false,
   "transfer_no_notes": true,
   "promise_failed_twice": "Say you could not record it and close as no_promise / service_error.",
-  "closing": "One product only: the outcome follows the outcome table."
+  "closing": "One product only. Close as promise when the promise was recorded."
  },
  "closing": {
   "thank_and_goodbye": true,
-  "farewell": "",
+  "farewell": "Thank you for your time. Goodbye.",
   "after_promise_then_transfer": "If a transfer follows a recorded promise, close as transferred with that transfer's reason.",
   "close_call_rule": "Every call ends with exactly one close_call, with an outcome and, where the table lists one, a reason. It is the last tool call. Thank the customer and say goodbye before close_call.",
   "outcome_table": [
    {
     "outcome": "promise",
     "reason": "",
-    "when": "At least one promise was recorded."
+    "when": "at least one promise was recorded"
    },
    {
     "outcome": "paid",
     "reason": "",
-    "when": "Customer says they already paid this past-due amount (rule 39)."
+    "when": "the customer says they already paid this past-due amount (rule 39)"
    },
    {
     "outcome": "transferred",
     "reason": "restructuring",
-    "when": "Request for a new payment plan or lower instalments (rule 41)."
+    "when": "request for a new payment plan or lower instalments (rule 41)"
    },
    {
     "outcome": "transferred",
     "reason": "human",
-    "when": "Customer insists on a human after being asked once whether you can help first (rule 42)."
+    "when": "the customer insists on a human (rule 42)"
    },
    {
     "outcome": "transferred",
     "reason": "support",
-    "when": "Hardship and the customer accepts the customer support team (rule 32)."
+    "when": "hardship and the customer accepts the support team (rule 32)"
    },
    {
     "outcome": "no_promise",
     "reason": "refused",
-    "when": "Persuasion attempts used up (rule 31), or the customer says twice after verification that they do not want to talk (rule 45)."
+    "when": "persuasion attempts used up (rule 31) or the customer says twice they do not want to talk after verification (rule 45)"
    },
    {
     "outcome": "no_promise",
     "reason": "hardship",
-    "when": "Hardship and the customer declines the support transfer (rule 32)."
+    "when": "hardship and the customer declines the support team (rule 32)"
    },
    {
     "outcome": "no_promise",
     "reason": "dispute",
-    "when": "Customer disputes the debt or product, or claims it was closed or paid off in the past (rule 40)."
+    "when": "the customer disputes the debt or product (rule 40)"
    },
    {
     "outcome": "no_promise",
     "reason": "service_error",
-    "when": "create_promise failed twice (rule 37)."
+    "when": "create_promise failed twice (rule 37)"
    },
    {
     "outcome": "not_verified",
     "reason": "failed",
-    "when": "Three wrong security answers in total (rule 14)."
+    "when": "three wrong security answers (rule 14)"
    },
    {
     "outcome": "not_verified",
     "reason": "declined",
-    "when": "Customer declines the security questions a second time, or asks a second time what the call is about instead of answering (rule 15); or says twice before verification that they do not want to talk (rule 45)."
+    "when": "the customer declines the security questions, or says twice they do not want to talk before verification (rules 15, 45)"
    },
    {
     "outcome": "not_reached",
     "reason": "callback",
-    "when": "Someone else answered and a callback inside the window was scheduled (rule 6)."
+    "when": "someone else answered and a callback was scheduled (rule 6)"
    },
    {
     "outcome": "not_reached",
     "reason": "no_callback",
-    "when": "Two offered callback times were both outside the window; nothing scheduled (rule 7)."
+    "when": "no callback time inside the window after asking once more (rule 7)"
    },
    {
     "outcome": "not_reached",
     "reason": "wrong_number",
-    "when": "The person says the number does not belong to the customer (rule 8)."
+    "when": "the number does not belong to the customer (rule 8)"
    },
    {
     "outcome": "not_reached",
     "reason": "deceased",
-    "when": "The person says the customer has died (rule 9)."
+    "when": "the customer has died (rule 9)"
    },
    {
     "outcome": "not_reached",
     "reason": "unclear",
-    "when": "Identity of the person on the line still unclear after the second ask (rule 3)."
+    "when": "identity of the speaker still unclear after the second ask (rule 3)"
    }
   ]
  },
  "residual_rules": [
   "Freya Bank calls customers who are 1 to 45 days late on one product.",
-  "Call variables: customer_id, first_name, last_name, title, now. Nothing else is known before the tools are called.",
   "Pass customer_id to every tool call.",
   "Address the customer as title plus last name.",
-  "`now` is the current date and time. All date rules use this, never the real clock.",
-  "The ban on saying \"collections\", \"debt\", \"payment\" or the product before identity is verified applies to everyone, including relatives.",
+  "All date rules use the call variable now, never the real clock.",
+  "Nothing else is known before the tools are called.",
+  "Rule 1: Do not say \"collections\", \"debt\", \"payment\" or the product before identity is verified. This applies to everyone, including relatives.",
   "Rule 3: Answer a question from the customer first (robot/AI question, scam question). The ask that follows is the second ask.",
-  "Rule 6: A callback is for today or the next business day, from 10:00 to 19:00, both included, and later than `now`. Call schedule_callback with the date and the time, then close as not_reached / callback.",
-  "Rule 7: If the person offers a day or a time outside the window, ask once for another time. If that is also outside it, do not schedule.",
-  "Rule 9: After \"I am sorry for your loss.\", ask nothing else.",
+  "Rule 5: When someone else answers, say nothing beyond the opening sentence and ask when the customer can be reached.",
+  "Rule 6: A callback is for today or the next business day, from 10:00 to 19:00, both included, and later than now. Call schedule_callback with the date and the time, then close as not_reached / callback.",
+  "Rule 7: If the person offers a day or a time outside that window, ask once for another time. If that is also outside it, do not schedule. Close as not_reached / no_callback.",
+  "Rule 9: If the customer has died, say \"I am sorry for your loss.\", ask nothing else, and close as not_reached / deceased.",
   "Rule 11: Ask the two security questions one at a time: first the date of birth, then the last four digits of the phone number on file. Call verify_identity with each answer.",
   "Rule 12: A wrong answer may be asked again. Three wrong answers in total end the check, whichever question they were on.",
-  "API: an unreadable date_of_birth value is rejected with ok=false and is not counted as a wrong answer.",
-  "Rule 15: Asking what the call is about instead of answering counts as declining. A second refusal or a second such question closes the call as not_verified / declined.",
-  "Rule 16: get_account is called only after both questions pass; it is refused until then.",
-  "Rule 18: The deadline is the 12th business day after today for 1 to 7 days late (early band), the 7th business day after today for 8 to 45 days late (late band).",
-  "Rule 20: If the named weekend day or holiday is after the deadline, rule 23 (offer the deadline) applies instead of offering the next business day.",
-  "Rule 24: The agent proposes every amount.",
+  "An unreadable date of birth is rejected by the service with ok=false and is not counted as a wrong answer.",
+  "Rule 15: A second refusal to answer or a second question about what the call is about closes the call as not_verified / declined.",
+  "Rule 16: After both questions pass, call get_account. get_account is refused until both questions are passed.",
+  "Rule 20: If the named weekend day or holiday is after the deadline, rule 23 applies (offer the deadline).",
+  "Rule 24: The agent proposes every amount. Never ask \"how much can you pay?\".",
   "Rule 26: When offering the floor, say that the rest stays overdue. The floor is offered once; attempt 2 may name the floor again, on the deadline.",
-  "Rule 30: Attempt 1 is for the full past-due amount, or for the floor if the customer already said the full amount is too much.",
-  "Rule 30: Attempt 2 exists in the late band only; the early band has one attempt.",
-  "Rule 31: When the attempts are used up, stop.",
-  "Rule 32 (hardship) comes before rules 30 (persuasion) and 41 (restructuring). If the customer still names a date or an amount themselves, record the promise under sections 7 and 8.",
-  "Rule 37: Say the promise is recorded only after create_promise returns ok: true.",
-  "Rule 40: Rule 39 (already paid) covers only a payment of this past-due amount; a claim that the product was closed or paid off in the past is a dispute.",
-  "Rule 45: Rule 42 (request for a human) applies before and after verification.",
+  "Rule 29: A date or an amount the customer proposes is never a refusal. Handle it with the date and amount rules.",
+  "Rule 30: A flat refusal or a non-answer uses one persuasion attempt. Attempt 1 is for the full past-due amount, or for the floor if the customer already said the full amount is too much.",
+  "Rule 31: When the attempts are used up, stop. Do not repeat an offer the customer already refused.",
+  "Rule 32 comes before rules 30 and 41: on hardship make no persuasion attempt; if the customer still names a date or an amount themselves, record the promise.",
+  "Rule 37: Say the promise is recorded only after create_promise returns ok: true. If it fails, try once more.",
+  "Rule 38: After a recorded promise, say this sentence: \"You will receive a text message confirming this promise.\"",
+  "Rule 40: A claim that the product was closed or paid off in the past is a dispute. Rule 39 (already paid) covers only a payment of this past-due amount.",
+  "Rule 42 (request for a human) applies before and after verification.",
+  "Rule 43: After answering the scam question, continue the call.",
   "Brief A never uses add_note.",
-  "A 500 from a tool means the service failed and nothing was recorded; the call may be repeated.",
-  "The service does not enforce the brief (it records a promise on a holiday or past the deadline without complaint); following the brief is the agent's job.",
-  "close_call reason is required for every outcome except promise and paid. Nothing is accepted after close_call.",
-  "The brief prescribes no exact farewell sentence and no exact sentence after verification; only: thank the customer and say goodbye before close_call."
- ]
+  "The service does not enforce the brief: it records a promise on a holiday or past the deadline without complaint. Following the brief is the agent's job.",
+  "A 500 response means the service failed, nothing was recorded, and the call may be repeated.",
+  "close_call reason is required for every outcome except promise and paid.",
+  "Nothing is accepted after close_call."
+ ],
+ "api": {
+  "_doc": "Exact property names and enum values copied from the tool API file.",
+  "tools": {
+   "verify_identity": {
+    "customer": "customer_id",
+    "field": "field",
+    "answer": "answer",
+    "verified": "verified",
+    "all_verified": "all_verified",
+    "wrong_left": "wrong_answers_left",
+    "hint": "hint"
+   },
+   "get_account": {
+    "customer": "customer_id",
+    "products": "products",
+    "product_id": "product_id",
+    "type": "type",
+    "past_due": "past_due",
+    "days_late": "days_late"
+   },
+   "create_promise": {
+    "customer": "customer_id",
+    "product_id": "product_id",
+    "amount": "amount",
+    "date": "date"
+   },
+   "add_note": {
+    "customer": "customer_id",
+    "product_id": "product_id",
+    "reason": "reason"
+   },
+   "schedule_callback": {
+    "customer": "customer_id",
+    "date": "date",
+    "time": "time"
+   },
+   "transfer_to_agent": {
+    "customer": "customer_id",
+    "queue": "queue"
+   },
+   "close_call": {
+    "customer": "customer_id",
+    "outcome": "outcome",
+    "reason": "reason"
+   }
+  },
+  "promise_outcome": "promise",
+  "transfer_outcome": "transferred",
+  "call_vars": {
+   "customer_id": "customer_id",
+   "now": "now"
+  }
+ }
 }

@@ -153,12 +153,107 @@ def band_for(days_late):
     bands = SPEC.get('bands') or []
     return bands[-1] if bands else dict()
 
+def _num(x, default=0.0):
+    try:
+        return float(x)
+    except Exception:
+        return default
+
 def floor_of(p):
-    fb = (SPEC.get('amounts') or dict()).get('floor_by_type') or dict()
+    am = SPEC.get('amounts') or dict()
+    fb = am.get('floor_by_type') or dict()
     field = fb.get(str(p.get('type')))
     if field and p.get(field) is not None:
         return p.get(field)
+    pct = _num(am.get('floor_percent_of_past_due'))
+    if pct > 0:
+        return round(_num(p.get('past_due')) * pct / 100.0, 2)
+    fixed = _num(am.get('floor_fixed_amount'))
+    if fixed > 0:
+        return min(fixed, _num(p.get('past_due'), fixed))
     return p.get('past_due')
+
+def rule_date(rule, today, deadline):
+    """A date from a date-rule object of the spec (see spec_schema.json). None if the rule is unknown."""
+    r = rule if isinstance(rule, dict) else dict()
+    ty = str(r.get('type') or '')
+    n = int(_num(r.get('n')))
+    one = datetime.timedelta(days=1)
+    d = None
+    if ty == 'today':
+        d = next_business(today)
+    elif ty == 'deadline':
+        d = deadline
+    elif ty == 'next_business_day':
+        d = next_business(today + one)
+    elif ty == 'business_days_after_today':
+        d = business_after(today, n) if n > 0 else next_business(today)
+    elif ty == 'calendar_days_after_today':
+        d = today + datetime.timedelta(days=n)
+        if str(r.get('roll') or 'next') == 'previous':
+            for _ in range(10):
+                if is_business(d) or d <= today:
+                    break
+                d = d - one
+            d = next_business(d)
+        else:
+            d = next_business(d)
+    elif ty == 'last_business_day_of_week':
+        w = int(_num(r.get('week')))
+        d = last_business_of_week(today, w)
+        skip_today = r.get('if_today_use_next_week')
+        if d is None or d < today or (d == today and skip_today is not False):
+            d = last_business_of_week(today, w + 1)
+    elif ty == 'end_of_month':
+        y = today.year
+        m = today.month
+        for _ in range(2):
+            nxt = datetime.date(y + (1 if m == 12 else 0), 1 if m == 12 else m + 1, 1)
+            d = nxt - one
+            for _k in range(10):
+                if is_business(d):
+                    break
+                d = d - one
+            if d >= today:
+                break
+            y = nxt.year
+            m = nxt.month
+    return d
+
+def deadline_of(band, today):
+    d = rule_date(band.get('deadline_rule'), today, None) if isinstance(band.get('deadline_rule'), dict) else None
+    if d is None:
+        n = int(_num(band.get('deadline_business_days_after_today')))
+        d = business_after(today, n) if n > 0 else next_business(today)
+    return d
+
+def offers_for(band, n_allowed, today, deadline):
+    """The persuasion offers of one product: a list of dicts (amount kind, date), from spec.persuasion.attempts."""
+    out = []
+    for a in (SPEC.get('persuasion') or dict()).get('attempts') or []:
+        if not isinstance(a, dict):
+            continue
+        bands = a.get('bands')
+        if isinstance(bands, list) and bands and str(band.get('name')) not in [str(x) for x in bands]:
+            continue
+        if len(out) >= n_allowed:
+            break
+        d = rule_date(a.get('date_rule'), today, deadline)
+        if d is None:
+            continue
+        if deadline is not None and d > deadline:
+            d = deadline
+        o = dict()
+        o['amount'] = str(a.get('amount') or 'full')
+        o['date'] = d.isoformat()
+        out.append(o)
+    return out
+
+def offer_amount_text(o, f):
+    kind = str(o.get('amount') or 'full')
+    if kind == 'floor':
+        return money(f['floor'])
+    return money(f['past_due'])
 
 def label_of(p):
     pw = (SPEC.get('debt_statement') or dict()).get('product_wording') or dict()
@@ -172,11 +267,8 @@ def label_of(p):
     return w.strip()
 
 def product_facts(today):
-    """Per-product dict list: id, label, amounts, band, deadline, floor, attempts, attempt dates."""
+    """Per-product dict list: id, label, amounts, band, deadline, floor, attempts, offers."""
     out = []
-    att1 = last_business_of_week(today, 0)
-    if att1 is None or att1 <= today:
-        att1 = last_business_of_week(today, 1)
     for p in products_from_vars():
         b = band_for(p.get('days_late'))
         f = dict()
@@ -186,16 +278,10 @@ def product_facts(today):
         f['past_due'] = p.get('past_due')
         f['days_late'] = p.get('days_late')
         f['band'] = str(b.get('name') or '')
-        try:
-            dl = business_after(today, int(b.get('deadline_business_days_after_today', 7)))
-        except Exception:
-            dl = business_after(today, 7)
+        dl = deadline_of(b, today)
         f['deadline'] = dl.isoformat()
         f['floor'] = floor_of(p)
-        try:
-            f['attempts'] = int(b.get('persuasion_attempts', 1))
-        except Exception:
-            f['attempts'] = 1
-        f['attempt1_date'] = att1.isoformat() if att1 else dl.isoformat()
+        f['attempts'] = int(_num(b.get('persuasion_attempts'), 1))
+        f['offers'] = offers_for(b, f['attempts'], today, dl)
         out.append(f)
     return out

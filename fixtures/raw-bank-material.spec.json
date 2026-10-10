@@ -6,26 +6,27 @@
  "opening": {
   "first_sentence": "Hello, this is the Northgate Savings virtual agent. We may record this call.",
   "confirm_question": "Am I speaking with {{title}} {{last_name}}?",
-  "confirmation_rule": "Ask for Mr or Ms + surname. Only a clear confirmation that the person is the named customer counts. The material sets no number of asks; if it stays unclear who is speaking, close as not_reached / unclear.",
+  "confirmation_rule": "Ask for Mr or Ms + surname. Only a clear confirmation that the person is the customer counts. The material does not say how many times to ask; if it stays unclear who is on the line, close as not_reached / unclear.",
   "forbidden_before_verification": [
-   "anything about the account",
    "arrears",
    "payment",
+   "anything about the account",
    "the reason for the call",
-   "balance or amounts",
-   "product names"
+   "balance or amount",
+   "the product",
+   "days late"
   ],
   "ai_question_answer": "",
-  "scam_question_answer": "Say: You can call the number on your card to check. Then carry on with the call.",
+  "scam_question_answer": "Say: \"You can call the number on your card to check.\" Then carry on.",
   "unclear_outcome": {
    "outcome": "not_reached",
    "reason": "unclear"
   }
  },
  "third_party": {
-  "rules": "If a relative or anyone else picks up: say only who we are (Northgate Savings virtual agent). Do not say why we call. Ask when the customer is reachable and offer a call-back. Never let a third party pay or hear a balance.",
+  "rules": "Say only who we are (the Northgate Savings virtual agent). Do not say why we call. Ask when the customer is reachable. Never let a third party pay or hear a balance.",
   "callback": {
-   "allowed_days": "any_business_day_within_2 (today or any of the next two working days; working days are Monday to Friday, excluding bank closure days)",
+   "allowed_days": "any_business_day_within_2 (today or any of the next two working days)",
    "max_days_ahead": 2,
    "from": "09:00",
    "to": "18:00",
@@ -65,14 +66,14 @@
     "field": "birth_year",
     "ask": "Ask second for the year of birth.",
     "answer_format": "Four digits.",
-    "notes": "Send the year only, as four digits (for example 1975)."
+    "notes": "Send the year as four digits, e.g. 1975."
    }
   ],
   "max_wrong_total": 3,
   "retry_allowed": true,
   "hints": [],
   "fail": {
-   "say": "Tell the customer to ring the helpline on the back of their card.",
+   "say": "Say that we cannot continue and ask them to ring the helpline on the back of their card.",
    "outcome": {
     "outcome": "not_verified",
     "reason": "failed"
@@ -86,16 +87,16 @@
     "reason": "declined"
    }
   },
-  "verified_say": "Thank you, the security check is complete."
+  "verified_say": "Thank you, that is confirmed."
  },
  "debt_statement": {
-  "intro": "After verification, state that you are calling from the arrears team.",
+  "intro": "State that you are calling from the arrears team.",
   "product_wording": {
-   "credit_card": "credit card ending {card_last4}",
-   "personal_loan": "personal loan",
-   "car_finance": "car finance"
+   "credit_card": "your credit card ending {card_last4}",
+   "personal_loan": "your personal loan",
+   "car_finance": "your car finance"
   },
-  "state": "Name the product, then state the amount in arrears (past_due) and the days in arrears (days_late).",
+  "state": "State the amount in arrears and the days in arrears.",
   "multi_product_rule": ""
  },
  "calendar": {
@@ -123,6 +124,7 @@
    "days_late_min": 1,
    "days_late_max": 10,
    "deadline_business_days_after_today": 10,
+   "deadline_rule": "",
    "persuasion_attempts": 1
   },
   {
@@ -130,15 +132,19 @@
    "days_late_min": 11,
    "days_late_max": 60,
    "deadline_business_days_after_today": 6,
+   "deadline_rule": "",
    "persuasion_attempts": 2
   }
  ],
  "date_rules": {
-  "promise_date": "The call day or later, a working day (Monday to Friday, not a bank closure day), not later than the latest promise date of the band (fresh: 10th working day after the call day; aged: 6th working day after the call day).",
-  "weekend_or_holiday": "If the customer names a weekend or closure day, propose the following working day.",
+  "promise_date": "The call day or later, a working day, not later than the latest promise date of the band.",
+  "weekend_or_holiday": "If the customer names a weekend or a bank closure day, propose the following working day.",
   "vague_period": "Ask once for the exact day, then propose the latest promise date.",
   "after_deadline": "Say the latest date we can take and offer it. Refusing that offer is a refusal.",
-  "next_weekday": "\"Next Monday\" is the Monday of the following week; \"this Monday\" is the Monday of the current week. Same for every weekday."
+  "next_weekday": "\"Next Monday\" is the Monday of the following week; \"this Monday\" is the Monday of the current week.",
+  "non_business_day_roll": "next",
+  "after_deadline_refusal": "persuasion",
+  "vague_fallback": "deadline"
  },
  "amounts": {
   "floor_by_type": {
@@ -150,25 +156,50 @@
   "never_ask_how_much": true,
   "too_much": "Offer the smallest amount once (minimum payment on a card, one instalment on a loan or car finance) and say the remainder stays in arrears.",
   "proposed_in_range": "Accept any amount between the smallest amount and the full amount.",
-  "below_floor": "Say we cannot take it and offer the smallest amount once."
+  "below_floor": "Say we cannot take it and offer the smallest amount once.",
+  "floor_percent_of_past_due": 0,
+  "floor_fixed_amount": 0
  },
  "persuasion": {
-  "first_ask": "Ask for payment of the full amount in arrears first.",
+  "first_ask": "Ask the customer to pay the full amount in arrears. Never ask what they can afford.",
   "date_or_amount_is_not_refusal": true,
-  "what_counts_as_refusal": "The customer turns down paying without giving a date or an amount. Refusing the offered latest promise date (after naming a date past it) is also a refusal. A date or an amount from the customer is never a refusal.",
-  "attempt_1": "Nudge 1 (both bands): propose the last working day of the current week; if the call is on that day, propose the last working day of the following week.",
-  "attempt_2": "Nudge 2 (aged band only): propose the smallest amount (minimum payment on a card, one instalment on a loan or car finance) on the latest promise date.",
+  "what_counts_as_refusal": "The customer says no to paying without giving a date or an amount, or refuses the offered latest promise date. A date or an amount from the customer is never a refusal.",
+  "attempt_1": "Nudge 1 (all bands): propose the last working day of the current week; if the call is on that day, the last working day of the following week.",
+  "attempt_2": "Nudge 2 (aged band only): propose the smallest amount on the latest promise date.",
   "exhausted_outcome": {
    "outcome": "no_promise",
    "reason": "refused"
   },
-  "do_not_repeat_refused_offer": true
+  "do_not_repeat_refused_offer": true,
+  "attempts": [
+   {
+    "n": 1,
+    "amount": "full_or_floor_if_too_much",
+    "date_rule": {
+     "type": "last_business_day_of_week",
+     "week": 0,
+     "if_today_use_next_week": true
+    },
+    "bands": "all"
+   },
+   {
+    "n": 2,
+    "amount": "floor",
+    "date_rule": {
+     "type": "deadline"
+    },
+    "bands": [
+     "aged"
+    ]
+   }
+  ],
+  "_attempts_doc": "attempts: one entry per persuasion attempt the material defines, in order. This is what the phone agent's offers are computed from, so fill it exactly."
  },
  "special_cases": [
   {
    "name": "hardship",
    "trigger": "Customer mentions illness, bereavement or job loss.",
-   "behaviour": "Say one sentence of sympathy. No nudges. Offer the care team once. This rule beats the nudge rule (7.7).",
+   "behaviour": "Say one sentence of sympathy. No nudges. Offer the care team once. Accepted: transfer to queue care. Declined: close as no promise / hardship. This rule beats the nudges.",
    "transfer_queue": "care",
    "accept_outcome": {
     "outcome": "transferred",
@@ -183,7 +214,7 @@
   {
    "name": "already_paid",
    "trigger": "Customer says they have already paid.",
-   "behaviour": "Say it can take up to two working days to show. Take no promise.",
+   "behaviour": "Say it can take up to two working days to show. No promise. Log paid.",
    "outcome": {
     "outcome": "paid",
     "reason": ""
@@ -192,8 +223,8 @@
   },
   {
    "name": "dispute",
-   "trigger": "Customer says: not my debt / never had it / closed years ago.",
-   "behaviour": "Do not argue. Take no promise.",
+   "trigger": "Not my debt / never had it / closed years ago.",
+   "behaviour": "Do not argue. No promise. Log no promise / dispute.",
    "outcome": {
     "outcome": "no_promise",
     "reason": "dispute"
@@ -203,7 +234,7 @@
   {
    "name": "restructuring",
    "trigger": "Customer wants a plan or smaller instalments.",
-   "behaviour": "Do not describe a plan. Transfer to queue plans.",
+   "behaviour": "Do not describe a plan. Transfer to queue plans and log transferred / plans.",
    "transfer_queue": "plans",
    "outcome": {
     "outcome": "transferred",
@@ -213,7 +244,7 @@
   {
    "name": "human",
    "trigger": "Customer wants to speak to a person.",
-   "behaviour": "Ask once if we can help. If they insist, transfer to queue agent.",
+   "behaviour": "Ask once if we can help. If they insist, transfer to queue agent and log transferred / agent.",
    "transfer_queue": "agent",
    "outcome": {
     "outcome": "transferred",
@@ -222,24 +253,24 @@
   },
   {
    "name": "refuses_to_talk",
-   "trigger": "",
+   "trigger": "Customer refuses to continue the conversation (not defined explicitly in the material; closest codes used).",
    "outcome_after_verification": {
-    "outcome": "",
-    "reason": ""
+    "outcome": "no_promise",
+    "reason": "refused"
    },
    "outcome_before_verification": {
-    "outcome": "",
-    "reason": ""
+    "outcome": "not_verified",
+    "reason": "declined"
    }
   },
   {
    "name": "unknown_question",
-   "behaviour": "For anything we cannot answer from the tools, say we do not have that information."
+   "behaviour": "For anything we cannot answer from the tools, say: \"We do not have that information.\""
   },
   {
    "name": "scam_question",
-   "trigger": "Customer asks \"Is this a scam\".",
-   "behaviour": "Say they can call the number on their card to check, then carry on.",
+   "trigger": "Customer asks \"Is this a scam?\"",
+   "behaviour": "Say they can call the number on their card to check, then carry on with the call.",
    "transfer_queue": "",
    "outcome": {
     "outcome": "",
@@ -261,7 +292,7 @@
   "one_promise_per_product": true,
   "cannot_change_recorded": "",
   "retry_on_failure": 1,
-  "failure_say": "Say we could not record it.",
+  "failure_say": "I am sorry, we could not record it.",
   "failure_outcome": {
    "outcome": "no_promise",
    "reason": "service_error"
@@ -275,7 +306,7 @@
   "per_product_attempts": false,
   "one_date_after_a_deadline": "",
   "one_readback_one_confirmation": false,
-  "note_products_without_promise": false,
+  "note_products_without_promise": true,
   "note_reasons": [
    "refused",
    "hardship",
@@ -292,7 +323,7 @@
   "thank_and_goodbye": true,
   "farewell": "Thank you for your time. Goodbye.",
   "after_promise_then_transfer": "",
-  "close_call_rule": "Every call ends with exactly one close_call. It is the last tool call and comes after a thank-you and goodbye. Nothing is accepted after it. A reason is required for every outcome except promise and paid.",
+  "close_call_rule": "Every call ends with exactly one close_call. It is the last tool call and comes after a thank-you and goodbye. Nothing is accepted after it.",
   "outcome_table": [
    {
     "outcome": "promise",
@@ -302,7 +333,7 @@
    {
     "outcome": "paid",
     "reason": "",
-    "when": "Customer says they have already paid."
+    "when": "The customer says they have already paid."
    },
    {
     "outcome": "transferred",
@@ -312,17 +343,17 @@
    {
     "outcome": "transferred",
     "reason": "plans",
-    "when": "Customer wants a plan or smaller instalments; transferred to queue plans."
+    "when": "The customer wants a plan or smaller instalments; transferred to queue plans."
    },
    {
     "outcome": "transferred",
     "reason": "agent",
-    "when": "Customer insists on a person after being asked once if we can help; transferred to queue agent."
+    "when": "The customer insists on a person; transferred to queue agent."
    },
    {
     "outcome": "no_promise",
     "reason": "refused",
-    "when": "The nudges are spent and there is no promise."
+    "when": "The nudges are spent without a promise."
    },
    {
     "outcome": "no_promise",
@@ -332,12 +363,12 @@
    {
     "outcome": "no_promise",
     "reason": "dispute",
-    "when": "Customer says not my debt / never had it / closed years ago."
+    "when": "Not my debt / never had it / closed years ago."
    },
    {
     "outcome": "no_promise",
     "reason": "service_error",
-    "when": "Recording the promise failed, was tried once more and failed again."
+    "when": "Recording the promise failed twice."
    },
    {
     "outcome": "not_verified",
@@ -347,7 +378,7 @@
    {
     "outcome": "not_verified",
     "reason": "declined",
-    "when": "Customer still will not answer the security questions after one explanation, or asks what this is about instead of answering."
+    "when": "The customer still will not answer the security questions after one explanation, or asks what this is about instead of answering."
    },
    {
     "outcome": "not_reached",
@@ -372,7 +403,7 @@
    {
     "outcome": "not_reached",
     "reason": "unclear",
-    "when": "It stays unclear who is speaking."
+    "when": "It stays unclear who is on the line."
    }
   ]
  },
@@ -381,30 +412,91 @@
   "The caller must introduce itself as the Northgate Savings virtual agent, say the call may be recorded, and ask for Mr or Ms + surname.",
   "Nothing about the account until the security check is done; that includes the word \"arrears\" and the word \"payment\".",
   "Security order: postcode of the registered address first, year of birth second.",
-  "Memo 2026-10-01 (a): the security check allows THREE wrong answers in total. superseded: mail said two wrong answers in total and we stop.",
-  "Memo 2026-10-01 (b): in the aged band the latest promise date is the 6th working day after the call day; the fresh band is unchanged (10th working day). superseded: policy 7.3 said the 5th working day for the aged band.",
-  "The memo overrides the policy where it differs.",
-  "If the customer asks \"what is this about\" instead of answering a security question, that is the same as declining; the one explanation that it protects their money still applies before logging not verified / declined.",
-  "Call-back: today or any of the next two working days, between nine and six, later than the current time. One retry if the slot is bad, then give up and log not reached / no_callback.",
-  "Call-back booked for a third party is logged not_reached / callback (code list; the mail does not name the reason for a successful call-back).",
-  "7.4: refusing the offer of the latest promise date is a refusal.",
-  "7.6: the smallest amount is offered only once, both when the full amount is too much and when the customer proposes less than the smallest amount.",
-  "7.7: nudge 1 does not state an amount; nudge 2 is the smallest amount on the latest promise date, aged band only.",
-  "7.7: when the nudges are spent, stop and log no promise / refused. Do not repeat an offer the customer turned down.",
-  "7.8: hardship beats 7.7 (no nudges once hardship is mentioned); the care team is offered once only.",
-  "7.9: wants a person -> ask once if we can help; only if they insist transfer to queue agent.",
-  "7.9: wants a plan or smaller instalments -> do not describe a plan.",
-  "7.9: \"Is this a scam\" -> they can call the number on their card to check, then carry on.",
-  "7.10: say \"recorded\" only after the tool confirms.",
-  "7.10: after a recorded promise say: \"We will send you a text message to confirm.\"",
-  "7.11: never offer discounts, write-offs, plans or anything not in this policy.",
-  "7.12: every call ends with one close_call, the last tool call, after a thank-you and goodbye.",
-  "Code list: the outcome paid and the outcome promise have no reason code.",
-  "Code list: note reasons (refused, hardship, dispute, paid, service_error) are used with several products only. The material gives no other rules for customers with several products.",
-  "Tool API: get_account is refused until both security questions are passed.",
-  "Tool API: the service does not enforce the policy (it records a promise on a holiday or past the deadline without complaint); following the rules is the agent's job.",
-  "Tool API: on a 500 service failure nothing was recorded and the call may be repeated.",
-  "Tool API: verify_identity may return the hint day_month_swapped; the material gives no rule for it.",
-  "The material gives no rule for a customer who refuses to talk, for changing the date or amount at the read-back, for changing a recorded promise, for the answer to a robot/AI question, or for the number of times to ask the name question."
- ]
+  "The service wants the postcode without spaces in capitals and the year as four digits.",
+  "superseded: two wrong answers in total end the security check (mail) -> memo 2026-10-01 (a): THREE wrong answers in total.",
+  "superseded: aged band latest promise date is the 5th working day after the call day (policy 7.3) -> memo 2026-10-01 (b): the 6th working day. The fresh band is unchanged (10th working day).",
+  "If the customer asks \"what is this about\" instead of answering a security question, that is the same as declining.",
+  "Call-back: today or any of the next two working days, between 09:00 and 18:00, later than the current time; one retry if the slot is bad, then give up and log not_reached / no_callback.",
+  "Never let a third party pay or hear a balance.",
+  "If the full amount is too much, offer the smallest amount once and say the remainder stays in arrears.",
+  "Below the smallest amount: say we cannot take it and offer the smallest amount once.",
+  "Nudge 1 proposes the last working day of the current week; if the call is on that day, the last working day of the following week. The material does not state the amount for nudge 1.",
+  "Nudge 2 is for the aged band only: the smallest amount on the latest promise date.",
+  "A date or an amount from the customer is never a refusal.",
+  "Do not repeat an offer the customer turned down.",
+  "Refusing the offered latest promise date is a refusal.",
+  "Hardship rule (7.8) beats the nudge rule (7.7): one sentence of sympathy, no nudges, offer the care team once.",
+  "Already paid: say it can take up to two working days to show; no promise.",
+  "Wants a plan or smaller instalments: do not describe one.",
+  "Wants a person: ask once if we can help; transfer only if they insist.",
+  "\"Is this a scam\": they can call the number on their card to check, then carry on.",
+  "Anything we cannot answer from the tools: say we do not have that information.",
+  "Say \"recorded\" only after the tool confirms.",
+  "If recording fails, try once more; if it fails again say we could not record it and log no_promise / service_error.",
+  "After a recorded promise say: \"We will send you a text message to confirm.\"",
+  "Never offer discounts, write-offs, plans or anything not in this policy.",
+  "Every call ends with one close_call, the last tool call, after a thank-you and goodbye.",
+  "Note reasons (refused, hardship, dispute, paid, service_error) are used with several products only; the material defines no further procedure for several products.",
+  "close_call reason is required for every outcome except promise and paid (tool API).",
+  "get_account is refused until both security questions are passed (tool API).",
+  "The service does not enforce the policy (it records a promise on a closure day or past the deadline); following the policy is the agent's job. A failed service call (500) recorded nothing and may be repeated (tool API).",
+  "The material does not say what to answer when asked whether the caller is a robot/AI; the caller introduces itself as the Northgate Savings virtual agent.",
+  "The material does not define how many times to ask for the customer's name before closing as not_reached / unclear; the code exists in the code list only.",
+  "The material does not define outcomes for a customer who simply refuses to talk; closest codes used: no_promise / refused after verification, not_verified / declined before verification.",
+  "The API hint day_month_swapped is not mentioned in the material; the security questions are postcode and year of birth only.",
+  "The material does not say what to do if the customer changes date or amount at the read-back or wants to change a recorded promise."
+ ],
+ "api": {
+  "_doc": "EXACT property names and enum values copied from the tool API file (never invented). Used to wire the tools.",
+  "tools": {
+   "verify_identity": {
+    "customer": "customer_id",
+    "field": "field",
+    "answer": "answer",
+    "verified": "verified",
+    "all_verified": "all_verified",
+    "wrong_left": "wrong_answers_left",
+    "hint": "hint"
+   },
+   "get_account": {
+    "customer": "customer_id",
+    "products": "products",
+    "product_id": "product_id",
+    "type": "type",
+    "past_due": "past_due",
+    "days_late": "days_late"
+   },
+   "create_promise": {
+    "customer": "customer_id",
+    "product_id": "product_id",
+    "amount": "amount",
+    "date": "date"
+   },
+   "add_note": {
+    "customer": "customer_id",
+    "product_id": "product_id",
+    "reason": "reason"
+   },
+   "schedule_callback": {
+    "customer": "customer_id",
+    "date": "date",
+    "time": "time"
+   },
+   "transfer_to_agent": {
+    "customer": "customer_id",
+    "queue": "queue"
+   },
+   "close_call": {
+    "customer": "customer_id",
+    "outcome": "outcome",
+    "reason": "reason"
+   }
+  },
+  "promise_outcome": "promise",
+  "transfer_outcome": "transferred",
+  "call_vars": {
+   "customer_id": "customer_id",
+   "now": "now"
+  }
+ }
 }

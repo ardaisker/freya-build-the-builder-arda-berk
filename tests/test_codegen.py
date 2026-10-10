@@ -30,10 +30,13 @@ def test_deadlines_pub04_pub07():
     v = facts([{"product_id": "p1", "type": "car_loan", "past_due": 1250, "days_late": 14, "instalment_amount": 400}])
     pf = json.loads(v["pf_json"])
     assert pf[0]["deadline"] == "2026-10-23" and pf[0]["band"] == "late" and pf[0]["attempts"] == 2
-    assert pf[0]["floor"] == 400 and pf[0]["attempt1_date"] == "2026-10-16"
+    assert pf[0]["floor"] == 400 and [o["date"] for o in pf[0]["offers"]] == ["2026-10-16", "2026-10-23"]
+    assert 'offer 1 = "1250.00 on Friday 16 October 2026" (use the floor 400.00 instead if the full amount was too much)' in v["facts"]
+    assert 'offer 2 = "400.00 on Friday 23 October 2026"' in v["facts"]
     v = facts([{"product_id": "p1", "type": "personal_loan", "past_due": 540, "days_late": 5, "instalment_amount": 180}])
     pf = json.loads(v["pf_json"])
-    assert pf[0]["deadline"] == "2026-11-02" and pf[0]["band"] == "early"
+    assert pf[0]["deadline"] == "2026-11-02" and pf[0]["band"] == "early" and len(pf[0]["offers"]) == 1
+    assert "STOP AT ONCE" in v["facts"]
     assert "LATEST PAYMENT DATE (deadline) Monday 2 November 2026" in v["facts"]
     assert "Monday 26 October 2026" in v["facts"]  # listed as holiday
 
@@ -60,7 +63,7 @@ def test_resolve_after_deadline():
     v["customer_date_text"] = "6 November"
     run("resolve_date", v)
     assert v["date_status"] == "after_deadline" and "Friday 23 October 2026" in v["date_verdict"]
-    assert "ATTEMPT 1 = 1250.00 on Friday 16 October 2026" in v["date_verdict"] and "ATTEMPT 2 = the floor 400.00 on Friday 23 October 2026" in v["date_verdict"]
+    assert "ATTEMPT 1 = 1250.00 on Friday 16 October 2026" in v["date_verdict"] and "ATTEMPT 2 = 400.00 on Friday 23 October 2026" in v["date_verdict"]
 
 
 def test_resolve_two_products_one_after_deadline():
@@ -169,3 +172,84 @@ def test_finalize():
     assert (v["call_outcome"], v["call_reason"]) == ("no_promise", "hardship")
     v = dict(base, promises_log="p1;", notes_log="p2:refused;"); run("finalize", v)
     assert (v["call_outcome"], v["call_reason"]) == ("promise", "")
+
+
+# ---- generalisation: nothing below uses Brief A's names or rules ----
+import copy, apimap
+
+
+def run_spec(name, vars, spec):
+    code = snippet(name, libs=("calendar_lib", "dateparse_lib"), SPEC=spec)
+    assert "{" not in code and "}" not in code
+    exec(code, {"vars": vars})
+    return vars
+
+
+def test_renamed_api_end_to_end_offline():
+    spec = json.load(open(ROOT / "fixtures" / "renamed.spec.json")); api = json.load(open(ROOT / "fixtures" / "renamed.openapi.json"))
+    A = apimap.resolve(spec, api)
+    assert A["tools"]["create_promise"] == {"customer": "client_ref", "product_id": "account_ref", "amount": "pledged_amount", "date": "pay_date"}
+    assert A["tools"]["verify_identity"]["verified"] == "match" and A["tools"]["verify_identity"]["all_verified"] == "identity_complete"
+    assert A["promise_outcome"] == "ptp" and A["transfer_outcome"] == "handed_over" and A["ok"] == "success"
+    S = dict(spec, api=A)
+    v = {"now": NOW, "get_account_response.data.accounts.0.account_ref": "a1", "get_account_response.data.accounts.0.kind": "card", "get_account_response.data.accounts.0.pan_last4": "1903",
+         "get_account_response.data.accounts.0.arrears": "2125.1", "get_account_response.data.accounts.0.days_in_arrears": "12", "get_account_response.data.accounts.0.min_due": "637.5"}
+    run_spec("facts", v, S)
+    pf = json.loads(v["pf_json"])
+    assert pf[0]["product_id"] == "a1" and pf[0]["floor"] == "637.5" and pf[0]["deadline"] == "2026-10-23" and "1903" in pf[0]["label"]
+    v2 = run_spec("finalize", {"promises_log": "a1;"}, S)
+    assert v2["call_outcome"] == "ptp"
+    from compile import compile_workflow
+    from lint import lint
+    wf = compile_workflow(spec, api); assert lint(wf) == []
+    body = [t for t in wf["nodes"]["negotiate"]["tools"] if t["function"]["name"] == "create_promise"][0]["function"]["parameters"]["properties"]["body"]["properties"]
+    assert set(body) == {"client_ref", "account_ref", "pledged_amount", "pay_date"} and body["client_ref"]["default"] == "{{client_ref}}"
+    close = wf["tools"][0]["function"]["parameters"]["properties"]["body"]["properties"]
+    assert close["result"]["default"] == "{{call_outcome}}" and close["detail"]["default"] == "{{call_reason}}"
+
+
+def test_heuristic_alone_maps_the_renamed_api():
+    api = json.load(open(ROOT / "fixtures" / "renamed.openapi.json"))
+    A = apimap.resolve({}, api)       # no model section at all
+    assert A["tools"]["verify_identity"]["answer"] == "reply" and A["tools"]["verify_identity"]["field"] == "question"
+    assert A["tools"]["get_account"]["products"] == "accounts" and A["tools"]["get_account"]["past_due"] == "arrears" and A["tools"]["get_account"]["days_late"] == "days_in_arrears"
+    assert A["tools"]["close_call"]["outcome"] == "result" and A["tools"]["transfer_to_agent"]["queue"] == "team" and A["error"] == "problem"
+
+
+def test_other_deadline_attempt_and_floor_rules():
+    spec = copy.deepcopy(SPEC)
+    spec["calendar"] = {"business_weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu"], "holidays": ["2026-10-15"]}
+    spec["bands"] = [{"name": "x", "days_late_min": 1, "days_late_max": 30, "deadline_rule": {"type": "calendar_days_after_today", "n": 10, "roll": "previous"}, "persuasion_attempts": 3},
+                     {"name": "y", "days_late_min": 31, "days_late_max": 999, "deadline_business_days_after_today": 3, "persuasion_attempts": 0}]
+    spec["persuasion"]["attempts"] = [{"n": 1, "amount": "full", "date_rule": {"type": "next_business_day"}, "bands": "all"},
+                                      {"n": 2, "amount": "floor", "date_rule": {"type": "business_days_after_today", "n": 3}, "bands": "all"},
+                                      {"n": 3, "amount": "floor", "date_rule": {"type": "end_of_month"}, "bands": ["x"]}]
+    spec["amounts"]["floor_by_type"] = {}
+    spec["amounts"]["floor_percent_of_past_due"] = 25
+    v = {"now": NOW, "get_account_response.data.products": json.dumps([{"product_id": "p1", "type": "car_loan", "past_due": 1000, "days_late": 5}, {"product_id": "p2", "type": "car_loan", "past_due": 200, "days_late": 40}])}
+    run_spec("facts", v, spec)
+    pf = json.loads(v["pf_json"])
+    # Wed 14 Oct + 10 calendar days = Sat 24 Oct -> previous business day Thu 22 Oct (Fri/Sat are the weekend here)
+    assert pf[0]["deadline"] == "2026-10-22" and pf[0]["floor"] == 250.0
+    # Thu 15 Oct is a holiday, Fri/Sat weekend -> next business day is Sun 18 Oct; 3 business days after today = 18, 19, 20; end of month capped at the deadline
+    assert [o["date"] for o in pf[0]["offers"]] == ["2026-10-18", "2026-10-20", "2026-10-22"] and [o["amount"] for o in pf[0]["offers"]] == ["full", "floor", "floor"]
+    assert pf[1]["offers"] == [] and "No persuasion offer for p2" in v["facts"]
+    assert 'offer 3 = "250.00 on Thursday 22 October 2026"' in v["facts"]
+    spec["date_rules"]["non_business_day_roll"] = "previous"
+    v["customer_date_text"] = "Saturday the 17th"
+    run_spec("resolve_date", v, spec)
+    assert v["date_status"] == "not_business" and "Wednesday 14 October 2026" in v["date_verdict"]
+
+
+def test_verify_hook_counts_wrong_answers_without_api_fields():
+    from compile import VERIFY_HOOK
+    code = VERIFY_HOOK
+    for k, val in (("@@HINTS@@", "{}"), ("@@HINT@@", "hint"), ("@@VERIFIED@@", "match"), ("@@ALL@@", "__none__"), ("@@LEFT@@", "__none__"), ("@@OK@@", "success"), ("@@ERR@@", "problem"),
+                   ("@@FMT@@", "x"), ("@@VSAY@@", "ok"), ("@@FIELD@@", "q2"), ("@@IS_LAST@@", "True"), ("@@MAXWRONG@@", "2")):
+        code = code.replace(k, val)
+    vars_ = {}
+    r = {"data": {"success": True, "match": False}}; exec(code, {"result": r, "vars": vars_}); assert "1 wrong answer(s) left" in r["data"]["what_to_do_next"]
+    r = {"data": {"success": True, "match": False}}; exec(code, {"result": r, "vars": vars_}); assert vars_["id_state"] == "failed"
+    vars_ = {}
+    r = {"data": {"success": True, "match": True}}; exec(code, {"result": r, "vars": vars_}); assert vars_["id_state"] == "verified"
+    r = {"data": {"success": False, "problem": "unreadable"}}; vars_ = {}; exec(code, {"result": r, "vars": vars_}); assert "does not count as wrong" in r["data"]["what_to_do_next"] and "id_wrong_n" not in vars_

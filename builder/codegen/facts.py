@@ -27,21 +27,29 @@ try:
         tw.append('this ' + WD_NAMES[i] + ' = ' + str(d1.day) + ' ' + MONTHS[d1.month - 1] + ('' if is_business(d1) else ' (not a business day)') + (' (past)' if d1 < today else ''))
         nw.append('next ' + WD_NAMES[i] + ' = ' + str(d2.day) + ' ' + MONTHS[d2.month - 1] + ('' if is_business(d2) else ' (not a business day)'))
     lines.append('WEEKDAY NAMES: ' + '; '.join(tw) + '. ' + '; '.join(nw) + '. A bare weekday name means the next one after today.')
-    att1 = last_business_of_week(today, 0)
-    if att1 is None or att1 <= today:
-        att1 = last_business_of_week(today, 1)
-    lines.append('PERSUASION ATTEMPT-1 DATE: ' + fmt(att1) + '.')
     if is_business(today):
         lines.append('Today is a business day, so "today" is an allowed payment day.')
     else:
         lines.append('Today is NOT a business day. The first allowed payment day is ' + fmt(next_business(today)) + '.')
     for f in pf:
         dl = datetime.date.fromisoformat(f['deadline'])
-        plan = 'SCRIPT for ' + f['product_id'] + ' after a refusal: offer 1 = "' + money(f['past_due']) + ' on ' + fmt(att1) + '" (use the floor ' + money(f['floor']) + ' instead if the full amount was too much).'
-        if f['attempts'] >= 2:
-            plan += ' If refused, offer 2 = "' + money(f['floor']) + ' on ' + fmt(dl) + '". If refused again, STOP: call add_note for ' + f['product_id'] + ' (or close the call if it is the only product). No third offer.'
-        else:
+        plan = ''
+        offers = f.get('offers') or []
+        for k, o in enumerate(offers):
+            od = fmt(datetime.date.fromisoformat(o['date']))
+            if k == 0:
+                plan = 'SCRIPT for ' + f['product_id'] + ' after a refusal: offer 1 = "' + offer_amount_text(o, f) + ' on ' + od + '"'
+                if str(o.get('amount')) == 'full_or_floor_if_too_much':
+                    plan += ' (use the floor ' + money(f['floor']) + ' instead if the full amount was too much)'
+                plan += '.'
+            else:
+                plan += ' If refused, offer ' + str(k + 1) + ' = "' + offer_amount_text(o, f) + ' on ' + od + '".'
+        if len(offers) == 1:
             plan += ' If refused, STOP AT ONCE: no second offer of any kind for ' + f['product_id'] + '; call add_note for it (or close the call if it is the only product).'
+        elif len(offers) > 1:
+            plan += ' If refused again, STOP: call add_note for ' + f['product_id'] + ' (or close the call if it is the only product). No further offer.'
+        elif f['attempts'] <= 0:
+            plan = 'No persuasion offer for ' + f['product_id'] + ': after a refusal, stop.'
         lines.append('PRODUCT ' + f['product_id'] + ': ' + f['label'] + '. Past due ' + money(f['past_due']) + ', ' + str(f['days_late']) + ' days late, band "' + f['band'] + '". LATEST PAYMENT DATE (deadline) ' + fmt(dl) + '. FLOOR (lowest amount you may accept) ' + money(f['floor']) + '. Persuasion attempts allowed: ' + str(f['attempts']) + '. ' + plan)
     if len(pf) > 1:
         lines.append('There are ' + str(len(pf)) + ' late products, in this order: ' + ', '.join([f['product_id'] + ' ' + f['label'] for f in pf]) + '.')

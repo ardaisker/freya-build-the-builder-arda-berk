@@ -6,6 +6,7 @@ try:
         pf = json.loads(getv('pf_json', '[]') or '[]')
     except Exception:
         pf = []
+    DR = SPEC.get('date_rules') or dict()
     d, status = parse_day_text(text, today)
     verdict = ''
     resolved = ''
@@ -14,7 +15,7 @@ try:
         vars['vague_hint'] = 'next' if ('next week' in low or 'week after' in low or 'following week' in low) else ('this' if 'this week' in low else '')
         dls = sorted(set([f['deadline'] for f in pf]))
         prop = ', '.join([fmt(datetime.date.fromisoformat(x)) for x in dls]) if dls else 'the deadline'
-        verdict = 'DATE CHECK: "' + text + '" is not an exact day. Ask once for the exact day. If the customer still gives none, propose the latest allowed date: ' + prop + '.'
+        verdict = 'DATE CHECK: "' + text + '" is not an exact day. Ask once for the exact day.' + ('' if str(DR.get('vague_fallback') or 'deadline') == 'none' else ' If the customer still gives none, propose the latest allowed date: ' + prop + '.')
         status = 'vague'
     elif d is None:
         verdict = 'DATE CHECK: "' + text + '" could not be understood as a day. Ask the customer for the exact day (for example "Friday the sixteenth of October").'
@@ -26,8 +27,16 @@ try:
             status = 'past'
         elif not is_business(d):
             nb = next_business(d)
+            if str(DR.get('non_business_day_roll') or 'next') == 'previous':
+                x = d
+                for _ in range(10):
+                    x = x - datetime.timedelta(days=1)
+                    if is_business(x) or x <= today:
+                        break
+                if is_business(x) and x >= today:
+                    nb = x
             why = 'a bank holiday' if is_holiday(d) else 'not a business day'
-            verdict = 'DATE CHECK: "' + text + '" = ' + fmt(d) + '. That is ' + why + '. Do not accept it. Offer the next business day, ' + fmt(nb) + '.'
+            verdict = 'DATE CHECK: "' + text + '" = ' + fmt(d) + '. That is ' + why + '. Do not accept it. Offer the nearest allowed business day, ' + fmt(nb) + '.'
             late = [f for f in pf if nb > datetime.date.fromisoformat(f['deadline'])]
             if late:
                 verdict += ' But for ' + ', '.join([f['label'] + ' (' + f['product_id'] + ')' for f in late]) + ' the latest allowed date is ' + ', '.join([fmt(datetime.date.fromisoformat(f['deadline'])) for f in late]) + ': offer that date for it instead.'
@@ -47,12 +56,16 @@ try:
             elif late:
                 verdict += ' It is AFTER the latest allowed date. Say the latest date you can record is ' + ', '.join([fmt(datetime.date.fromisoformat(f['deadline'])) + ' for ' + f['label'] for f in late]) + ' and offer that date (this offer is not a persuasion attempt).'
                 f0 = late[0]
-                a1 = fmt(datetime.date.fromisoformat(f0['attempt1_date']))
-                verdict += ' If the customer refuses that latest date, it is a refusal: then make ATTEMPT 1 = ' + money(f0['past_due']) + ' on ' + a1 + '.'
-                if int(f0.get('attempts') or 1) >= 2:
-                    verdict += ' Only if attempt 1 is refused too, make ATTEMPT 2 = the floor ' + money(f0['floor']) + ' on ' + fmt(datetime.date.fromisoformat(f0['deadline'])) + '. After that, stop.'
+                offers = f0.get('offers') or []
+                if str(DR.get('after_deadline_refusal') or 'persuasion') == 'close':
+                    verdict += ' If the customer refuses that latest date, treat it as a final refusal.'
+                elif offers:
+                    verdict += ' If the customer refuses that latest date, it is a refusal: then make'
+                    for k, o in enumerate(offers):
+                        verdict += (' ATTEMPT ' if k == 0 else ' Only if that is refused too, ATTEMPT ') + str(k + 1) + ' = ' + offer_amount_text(o, f0) + ' on ' + fmt(datetime.date.fromisoformat(o['date'])) + '.'
+                    verdict += ' After that, stop.'
                 else:
-                    verdict += ' If attempt 1 is refused, stop (no attempt 2 for this product).'
+                    verdict += ' If the customer refuses that latest date, treat it as a refusal.'
                 status = 'after_deadline'
             else:
                 status = 'ok'

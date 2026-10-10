@@ -110,6 +110,7 @@
       "days_late_min": 1,
       "days_late_max": 7,
       "deadline_business_days_after_today": 12,
+      "deadline_rule": "ONLY if the deadline is not 'the Nth business day after today': a date rule object: {\"type\": \"today\" | \"deadline\" | \"next_business_day\" | \"business_days_after_today\" (with n) | \"calendar_days_after_today\" (with n and roll: next|previous) | \"last_business_day_of_week\" (with week: 0 this week, 1 next week; if_today_use_next_week: true|false) | \"end_of_month\", \"n\": number}",
       "persuasion_attempts": 1
     }
   ],
@@ -118,7 +119,10 @@
     "weekend_or_holiday": "what to do",
     "vague_period": "what to do",
     "after_deadline": "what to do",
-    "next_weekday": "meaning of 'next <weekday>' and 'this <weekday>'"
+    "next_weekday": "meaning of 'next <weekday>' and 'this <weekday>'",
+    "non_business_day_roll": "next | previous: which business day to offer when the customer names a weekend day or a holiday",
+    "after_deadline_refusal": "persuasion | close: what refusing the offered deadline leads to (persuasion = it counts as a refusal and the attempts start; close = the call closes as refused)",
+    "vague_fallback": "deadline | none: what to propose when the customer still gives no exact day"
   },
   "amounts": {
     "floor_by_type": {
@@ -128,7 +132,9 @@
     "never_ask_how_much": true,
     "too_much": "what to do when the full amount is too much",
     "proposed_in_range": "what to do when the customer proposes an amount between floor and full",
-    "below_floor": "what to do when the customer proposes less than the floor"
+    "below_floor": "what to do when the customer proposes less than the floor",
+    "floor_percent_of_past_due": "number (0 if the floor is not a percentage of the past-due amount)",
+    "floor_fixed_amount": "number (0 if the floor is not a fixed amount)"
   },
   "persuasion": {
     "first_ask": "the first question about paying",
@@ -140,7 +146,16 @@
       "outcome": "enum",
       "reason": "enum"
     },
-    "do_not_repeat_refused_offer": true
+    "do_not_repeat_refused_offer": true,
+    "attempts": [
+      {
+        "n": 1,
+        "amount": "full | floor | full_or_floor_if_too_much (full amount, or the floor when the customer already said the full amount is too much)",
+        "date_rule": "a date rule object: {\"type\": \"today\" | \"deadline\" | \"next_business_day\" | \"business_days_after_today\" (with n) | \"calendar_days_after_today\" (with n and roll: next|previous) | \"last_business_day_of_week\" (with week: 0 this week, 1 next week; if_today_use_next_week: true|false) | \"end_of_month\", \"n\": number}",
+        "bands": "\"all\" or a list of band names that get this attempt"
+      }
+    ],
+    "_attempts_doc": "attempts: one entry per persuasion attempt the material defines, in order. This is what the phone agent's offers are computed from, so fill it exactly."
   },
   "special_cases": [
     {
