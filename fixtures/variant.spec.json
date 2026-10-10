@@ -1,0 +1,555 @@
+{
+ "_doc": "Generic policy spec for an outbound collections call. Filled by the model from the brief; read by compile.py.",
+ "bank_name": "Harbour Credit Union",
+ "agent_self_name": "automated assistant",
+ "language": "English",
+ "opening": {
+  "first_sentence": "Good day, this is the automated assistant of Harbour Credit Union. This call is on a monitored line.",
+  "confirm_question": "May I speak with {{first_name}} {{last_name}}?",
+  "confirmation_rule": "Only \"yes\", \"speaking\", \"that is me\" or the member's own name is a confirmation. Anything else is not. Ask up to three times in total; if the third answer is still not a confirmation, close as not_reached / unclear.",
+  "forbidden_before_verification": [
+   "arrears",
+   "overdue",
+   "money",
+   "the reason for the call"
+  ],
+  "ai_question_answer": "I am Harbour's automated assistant.",
+  "scam_question_answer": "You can check this call on the number printed on your statement.",
+  "unclear_outcome": {
+   "outcome": "not_reached",
+   "reason": "unclear"
+  }
+ },
+ "third_party": {
+  "rules": "Say nothing about the reason of the call. Ask when the member can be reached.",
+  "callback": {
+   "allowed_days": "any_business_day_within_3 (any of the next three business days after today; not today)",
+   "max_days_ahead": 3,
+   "from": "08:30",
+   "to": "17:30",
+   "must_be_after_now": true,
+   "ask_again_once": false,
+   "ok_outcome": {
+    "outcome": "not_reached",
+    "reason": "callback"
+   },
+   "fail_outcome": {
+    "outcome": "not_reached",
+    "reason": "no_callback"
+   }
+  },
+  "wrong_number": {
+   "outcome": "not_reached",
+   "reason": "wrong_number"
+  },
+  "deceased": {
+   "say": "We are very sorry to hear that.",
+   "outcome": {
+    "outcome": "not_reached",
+    "reason": "deceased"
+   }
+  },
+  "relative_rule": "Nobody but the verified member is told why we call. Say nothing about the reason of the call to anyone else."
+ },
+ "identity": {
+  "questions": [
+   {
+    "field": "postcode",
+    "ask": "Ask for the postcode of the home address.",
+    "answer_format": "Capitals, no spaces.",
+    "notes": "First question."
+   },
+   {
+    "field": "birth_year",
+    "ask": "Ask for the year of birth.",
+    "answer_format": "Four digits.",
+    "notes": "Second question."
+   },
+   {
+    "field": "account_pin_last2",
+    "ask": "Ask for the last two digits of the account PIN.",
+    "answer_format": "Two digits.",
+    "notes": "Third question."
+   }
+  ],
+  "max_wrong_total": 2,
+  "retry_allowed": true,
+  "hints": [],
+  "fail": {
+   "say": "Please visit a branch with photo ID.",
+   "outcome": {
+    "outcome": "not_verified",
+    "reason": "failed"
+   }
+  },
+  "decline": {
+   "explain_once": "Tell the member once: \"This check keeps your account safe.\" A second refusal closes the call.",
+   "asking_why_counts_as_decline": false,
+   "outcome": {
+    "outcome": "not_verified",
+    "reason": "declined"
+   }
+  },
+  "verified_say": "Thank you, the security check is complete."
+ },
+ "debt_statement": {
+  "intro": "After the check, call get_account. Say you are calling from member accounts about an overdue balance.",
+  "product_wording": {
+   "credit_card": "credit card ending {card_last4}",
+   "overdraft": "overdraft",
+   "mortgage": "mortgage"
+  },
+  "state": "For each product: the product name, the overdue amount and the number of days overdue.",
+  "multi_product_rule": "State all products first (name, overdue amount, days overdue for each), then ask once whether all can be paid today, then go product by product."
+ },
+ "calendar": {
+  "business_weekdays": [
+   "Mon",
+   "Tue",
+   "Wed",
+   "Thu",
+   "Fri"
+  ],
+  "holidays": [
+   "2026-10-12",
+   "2026-11-11",
+   "2026-12-25",
+   "2026-12-28"
+  ],
+  "next_weekday_means": "",
+  "this_weekday_means": ""
+ },
+ "bands": [
+  {
+   "name": "soft",
+   "days_late_min": 1,
+   "days_late_max": 14,
+   "deadline_business_days_after_today": 0,
+   "deadline_rule": {
+    "type": "calendar_days_after_today",
+    "n": 10,
+    "roll": "previous"
+   },
+   "persuasion_attempts": 2
+  },
+  {
+   "name": "firm",
+   "days_late_min": 15,
+   "days_late_max": 60,
+   "deadline_business_days_after_today": 5,
+   "deadline_rule": {
+    "type": "business_days_after_today",
+    "n": 5
+   },
+   "persuasion_attempts": 3
+  },
+  {
+   "name": "legal",
+   "days_late_min": 61,
+   "days_late_max": 99999,
+   "deadline_business_days_after_today": 1,
+   "deadline_rule": {
+    "type": "next_business_day"
+   },
+   "persuasion_attempts": 0
+  }
+ ],
+ "date_rules": {
+  "promise_date": "The call day or later, a business day, and not after the latest promise date of the stage.",
+  "weekend_or_holiday": "Offer the business day before it. Never a day before the call day; in that case offer the next business day.",
+  "vague_period": "If the member gives no exact day (\"soon\", \"next month\"), ask once for the exact day. If there is still none, that is a refusal and uses one reminder.",
+  "after_deadline": "Offer the latest promise date once. If the member does not accept it, close as no_promise / refused. No reminders follow.",
+  "next_weekday": "",
+  "non_business_day_roll": "previous",
+  "after_deadline_refusal": "close",
+  "vague_fallback": "none"
+ },
+ "amounts": {
+  "floor_by_type": {},
+  "ask_full_first": true,
+  "never_ask_how_much": true,
+  "too_much": "Offer the smallest amount (20 percent of the overdue amount) once and say the remainder stays overdue.",
+  "proposed_in_range": "Accept any amount from the smallest amount up to the whole overdue amount.",
+  "below_floor": "Less than the smallest amount cannot be recorded: offer the smallest amount once.",
+  "floor_percent_of_past_due": 20,
+  "floor_fixed_amount": 0
+ },
+ "persuasion": {
+  "first_ask": "Ask for the whole overdue amount first (with several products: ask once whether all can be paid today). Never ask what the member can afford.",
+  "date_or_amount_is_not_refusal": true,
+  "what_counts_as_refusal": "A refusal, or no answer about paying, uses one reminder. Still no exact day after being asked once for it is also a refusal.",
+  "attempt_1": "Reminder 1: the whole overdue amount on the next business day.",
+  "attempt_2": "Reminder 2: the smallest amount on the 3rd business day after the call day (soft and firm stages). Reminder 3 (firm stage only): the smallest amount on the latest promise date.",
+  "exhausted_outcome": {
+   "outcome": "no_promise",
+   "reason": "refused"
+  },
+  "do_not_repeat_refused_offer": false,
+  "attempts": [
+   {
+    "n": 1,
+    "amount": "full",
+    "date_rule": {
+     "type": "next_business_day"
+    },
+    "bands": [
+     "soft",
+     "firm"
+    ]
+   },
+   {
+    "n": 2,
+    "amount": "floor",
+    "date_rule": {
+     "type": "business_days_after_today",
+     "n": 3
+    },
+    "bands": [
+     "soft",
+     "firm"
+    ]
+   },
+   {
+    "n": 3,
+    "amount": "floor",
+    "date_rule": {
+     "type": "deadline"
+    },
+    "bands": [
+     "firm"
+    ]
+   }
+  ],
+  "_attempts_doc": "attempts: one entry per persuasion attempt the material defines, in order."
+ },
+ "special_cases": [
+  {
+   "name": "hardship",
+   "trigger": "Member mentions illness, bereavement or redundancy.",
+   "behaviour": "Say one sentence of sympathy. No reminders. Offer the hardship desk once. Accepted: transfer_to_agent queue hardship, close transferred / hardship. Declined: close no_promise / hardship.",
+   "transfer_queue": "hardship",
+   "accept_outcome": {
+    "outcome": "transferred",
+    "reason": "hardship"
+   },
+   "decline_outcome": {
+    "outcome": "no_promise",
+    "reason": "hardship"
+   },
+   "note_reason": "hardship"
+  },
+  {
+   "name": "already_paid",
+   "trigger": "Member says \"I have paid\".",
+   "behaviour": "Say that payments show within two business days. Take no promise. Close as paid.",
+   "outcome": {
+    "outcome": "paid",
+    "reason": ""
+   },
+   "note_reason": "paid"
+  },
+  {
+   "name": "dispute",
+   "trigger": "Member says \"Not my debt\".",
+   "behaviour": "Do not argue. Close no_promise / dispute.",
+   "outcome": {
+    "outcome": "no_promise",
+    "reason": "dispute"
+   },
+   "note_reason": "dispute"
+  },
+  {
+   "name": "restructuring",
+   "trigger": "Member asks for an arrangement or smaller payments.",
+   "behaviour": "Describe nothing. transfer_to_agent queue arrangements, close transferred / arrangements.",
+   "transfer_queue": "arrangements",
+   "outcome": {
+    "outcome": "transferred",
+    "reason": "arrangements"
+   }
+  },
+  {
+   "name": "human",
+   "trigger": "Member asks for a person.",
+   "behaviour": "Ask once whether you can help. If they insist, transfer_to_agent queue agent, close transferred / agent.",
+   "transfer_queue": "agent",
+   "outcome": {
+    "outcome": "transferred",
+    "reason": "agent"
+   }
+  },
+  {
+   "name": "refuses_to_talk",
+   "trigger": "After the check: a refusal or no answer about paying, once the reminders of the stage are used up (legal stage: at once). Before the check: the member will not answer the security questions a second time.",
+   "outcome_after_verification": {
+    "outcome": "no_promise",
+    "reason": "refused"
+   },
+   "outcome_before_verification": {
+    "outcome": "not_verified",
+    "reason": "declined"
+   }
+  },
+  {
+   "name": "unknown_question",
+   "behaviour": ""
+  },
+  {
+   "name": "bankruptcy_or_insolvency",
+   "trigger": "Member mentions bankruptcy or insolvency.",
+   "behaviour": "Say \"I will pass this to our legal desk.\", then transfer_to_agent queue legal, close transferred / legal.",
+   "transfer_queue": "legal",
+   "outcome": {
+    "outcome": "transferred",
+    "reason": "legal"
+   },
+   "note_reason": ""
+  },
+  {
+   "name": "represented",
+   "trigger": "Member says a debt adviser or solicitor acts for them.",
+   "behaviour": "Do not discuss the account any further. Thank them and close as no_promise / represented.",
+   "transfer_queue": "",
+   "outcome": {
+    "outcome": "no_promise",
+    "reason": "represented"
+   },
+   "note_reason": "represented"
+  },
+  {
+   "name": "legal_stage_refusal",
+   "trigger": "Product is 61 or more days overdue and the member refuses or gives no answer about paying.",
+   "behaviour": "There are no reminders in the legal stage: a refusal closes the call at once as no_promise / refused.",
+   "transfer_queue": "",
+   "outcome": {
+    "outcome": "no_promise",
+    "reason": "refused"
+   },
+   "note_reason": "refused"
+  }
+ ],
+ "forbidden_offers": [
+  "a discount",
+  "a payment holiday",
+  "anything not written in the specification",
+  "describing an arrangement or smaller payments",
+  "asking what the member can afford"
+ ],
+ "confirm_record": {
+  "readback": "Read back product, amount and date and ask \"Shall I record that?\".",
+  "record_only_after_clear_yes": true,
+  "changed_at_readback": "",
+  "one_promise_per_product": true,
+  "cannot_change_recorded": "",
+  "retry_on_failure": 2,
+  "failure_say": "I am sorry, this could not be recorded.",
+  "failure_outcome": {
+   "outcome": "no_promise",
+   "reason": "service_error"
+  },
+  "recorded_say": "A confirmation letter will be sent to you."
+ },
+ "multi_product": {
+  "enabled": true,
+  "ask_all_today_first": true,
+  "order": "State all products first, ask once whether all can be paid today, then go product by product.",
+  "per_product_attempts": true,
+  "one_date_after_a_deadline": "",
+  "one_readback_one_confirmation": false,
+  "note_products_without_promise": true,
+  "note_reasons": [
+   "refused",
+   "hardship",
+   "dispute",
+   "paid",
+   "service_error",
+   "represented"
+  ],
+  "dispute_or_paid_does_not_end_call": true,
+  "transfer_no_notes": false,
+  "promise_failed_twice": "If create_promise fails, try again up to two more times. If it still fails, say it could not be recorded and call add_note with reason service_error for that product.",
+  "closing": "For every product without a promise call add_note with its reason. The material does not say how the outcome is chosen with several products; use promise when at least one promise was recorded, otherwise the outcome and reason of what ended the call."
+ },
+ "closing": {
+  "thank_and_goodbye": true,
+  "farewell": "Thank you. Goodbye from Harbour Credit Union.",
+  "after_promise_then_transfer": "",
+  "close_call_rule": "Thank the member, say \"Goodbye from Harbour Credit Union.\", then exactly one close_call. It is always the last tool call; nothing is accepted after it. A reason is required for every outcome except promise and paid.",
+  "outcome_table": [
+   {
+    "outcome": "promise",
+    "reason": "",
+    "when": "A promise was recorded."
+   },
+   {
+    "outcome": "paid",
+    "reason": "",
+    "when": "Member says they have already paid."
+   },
+   {
+    "outcome": "transferred",
+    "reason": "hardship",
+    "when": "Member accepted the hardship desk and was transferred to queue hardship."
+   },
+   {
+    "outcome": "transferred",
+    "reason": "arrangements",
+    "when": "Member asked for an arrangement or smaller payments and was transferred to queue arrangements."
+   },
+   {
+    "outcome": "transferred",
+    "reason": "agent",
+    "when": "Member insisted on a person and was transferred to queue agent."
+   },
+   {
+    "outcome": "transferred",
+    "reason": "legal",
+    "when": "Member mentioned bankruptcy or insolvency and was transferred to queue legal."
+   },
+   {
+    "outcome": "no_promise",
+    "reason": "refused",
+    "when": "Reminders of the stage used up; legal stage refusal; or the member did not accept the latest promise date after naming a later date."
+   },
+   {
+    "outcome": "no_promise",
+    "reason": "hardship",
+    "when": "Hardship mentioned and the hardship desk was declined."
+   },
+   {
+    "outcome": "no_promise",
+    "reason": "dispute",
+    "when": "Member says it is not their debt."
+   },
+   {
+    "outcome": "no_promise",
+    "reason": "service_error",
+    "when": "Recording the promise failed after the first try and two more tries."
+   },
+   {
+    "outcome": "no_promise",
+    "reason": "represented",
+    "when": "A debt adviser or solicitor acts for the member."
+   },
+   {
+    "outcome": "not_verified",
+    "reason": "failed",
+    "when": "Two wrong security answers in total."
+   },
+   {
+    "outcome": "not_verified",
+    "reason": "declined",
+    "when": "Second refusal to answer the security questions."
+   },
+   {
+    "outcome": "not_reached",
+    "reason": "callback",
+    "when": "Somebody else answered and a call-back was booked."
+   },
+   {
+    "outcome": "not_reached",
+    "reason": "no_callback",
+    "when": "Somebody else answered and the day or time offered was outside the allowed window; nothing booked."
+   },
+   {
+    "outcome": "not_reached",
+    "reason": "wrong_number",
+    "when": "Wrong number."
+   },
+   {
+    "outcome": "not_reached",
+    "reason": "deceased",
+    "when": "Member is deceased."
+   },
+   {
+    "outcome": "not_reached",
+    "reason": "unclear",
+    "when": "The third answer to the opening question is still not a confirmation."
+   }
+  ]
+ },
+ "residual_rules": [
+  "Call variables: customer_id, first_name, last_name, title, now (date and time of the call; every date rule uses it).",
+  "1.4 Before the security check nobody is told why we call. The words \"arrears\", \"overdue\" and \"money\" are not used before the check has passed.",
+  "2.3 There is no second try for a call-back: if the day or the time offered is outside the next three business days (not today), 08:30 to 17:30, do not book anything and close as not_reached / no_callback.",
+  "3.1 Three security questions in this order: postcode of the home address, year of birth, last two digits of the account PIN. Send each answer with verify_identity.",
+  "3.2 Two wrong answers in total end the check (the brief wins over the tool API summary that says three wrong answers end the check): tell the member to visit a branch with photo ID.",
+  "The tool API says get_account is refused until the questions are passed; the brief requires all three questions to pass before get_account.",
+  "The API defines the hint day_month_swapped, but the brief gives no rule for it.",
+  "4.4 If the member names a weekend or closure day, offer the business day before it; never a day before the call day, in that case the next business day.",
+  "4.2 Soft stage latest promise date: 10 calendar days after the call day; if that day is not a business day, the business day before it.",
+  "4.5 After a date beyond the latest promise date, the latest promise date is offered once; if not accepted, close as no_promise / refused with no reminders.",
+  "4.6 / 4.9 No exact day after asking once is a refusal and uses one reminder.",
+  "5.2 The smallest amount we record is 20 percent of the overdue amount, for every product.",
+  "5.3 When offering the smallest amount after \"too much\", say the remainder stays overdue. The smallest amount is offered once.",
+  "6.3 Reminder 3 exists in the firm stage only: the smallest amount on the latest promise date.",
+  "6.4 In the legal stage there are no reminders: a refusal closes the call at once as no_promise / refused.",
+  "7.1 Hardship: one sentence of sympathy, no reminders, offer the hardship desk once.",
+  "7.2 \"I have paid\": say that payments show within two business days, take no promise.",
+  "7.4 Arrangement or smaller payments: describe nothing before transferring.",
+  "7.6 Bankruptcy or insolvency: say exactly \"I will pass this to our legal desk.\"",
+  "7.7 Debt adviser or solicitor acts for them: do not discuss the account any further, thank them and close as no_promise / represented.",
+  "7.8 Never offer a discount, a payment holiday or anything not written here.",
+  "8.2 If recording fails, try again up to two more times (three tries in total) before closing as no_promise / service_error.",
+  "8.4 For a product without a promise call add_note with the reason (refused, hardship, dispute, paid, service_error, represented).",
+  "9 Thank the member, say \"Goodbye from Harbour Credit Union.\", then exactly one close_call.",
+  "The service does not enforce the brief: it records a promise on a closure day or past the latest promise date without complaint. Following the brief is the agent's job.",
+  "A 500 response means the service failed and nothing was recorded; the call may be repeated.",
+  "The brief does not say what to do when the member changes date or amount at the read-back, wants to change a recorded promise, or asks a question the brief does not cover.",
+  "The brief does not define the meaning of \"next <weekday>\" or \"this <weekday>\".",
+  "The brief's own word for the persuasion attempts is \"reminders\"; for the bands it is \"stage\" (soft, firm, legal)."
+ ],
+ "api": {
+  "_doc": "EXACT property names and enum values copied from the tool API file.",
+  "tools": {
+   "verify_identity": {
+    "customer": "customer_id",
+    "field": "field",
+    "answer": "answer",
+    "verified": "verified",
+    "all_verified": "all_verified",
+    "wrong_left": "wrong_answers_left",
+    "hint": "hint"
+   },
+   "get_account": {
+    "customer": "customer_id",
+    "products": "products",
+    "product_id": "product_id",
+    "type": "type",
+    "past_due": "overdue_amount",
+    "days_late": "days_overdue"
+   },
+   "create_promise": {
+    "customer": "customer_id",
+    "product_id": "product_id",
+    "amount": "amount",
+    "date": "date"
+   },
+   "add_note": {
+    "customer": "customer_id",
+    "product_id": "product_id",
+    "reason": "reason"
+   },
+   "schedule_callback": {
+    "customer": "customer_id",
+    "date": "date",
+    "time": "time"
+   },
+   "transfer_to_agent": {
+    "customer": "customer_id",
+    "queue": "queue"
+   },
+   "close_call": {
+    "customer": "customer_id",
+    "outcome": "outcome",
+    "reason": "reason"
+   }
+  },
+  "promise_outcome": "promise",
+  "transfer_outcome": "transferred",
+  "call_vars": {
+   "customer_id": "customer_id",
+   "now": "now"
+  }
+ }
+}

@@ -30,17 +30,23 @@ def word_number(s):
 
 VAGUE = ['next week', 'week after', 'end of', 'beginning of', 'start of', 'salary', 'pay day', 'payday', 'paycheck', 'couple of', 'few days', 'few weeks', 'sometime', 'some time', 'later', 'soon', 'as soon', 'when i', 'after i', 'month', 'not sure', 'maybe', 'around the', 'mid']
 
+_WD_WORDS = [['mon', 'monday'], ['tue', 'tues', 'tuesday'], ['wed', 'weds', 'wednesday'], ['thu', 'thur', 'thurs', 'thursday'], ['fri', 'friday'], ['sat', 'saturday'], ['sun', 'sunday']]
+_MONTH_EXTRA = ['sept']
+
 def _month_index(tok):
-    t = tok.lower()[:3]
+    """1-12 for a month name or its usual abbreviation, else None. Whole words only ('month' is not Monday, 'marked' is not March)."""
+    t = str(tok).lower().strip('.')
     for i, m in enumerate(MONTHS):
-        if m.lower()[:3] == t:
+        if t == m.lower() or (len(t) == 3 and t == m.lower()[:3]):
             return i + 1
+    if t in _MONTH_EXTRA:
+        return 9
     return None
 
 def _weekday_index(tok):
-    t = tok.lower()[:3]
-    for i, w in enumerate(WD_SHORT):
-        if w.lower() == t:
+    t = str(tok).lower().strip('.')
+    for i, words in enumerate(_WD_WORDS):
+        if t in words:
             return i
     return None
 
@@ -113,14 +119,19 @@ def parse_day_text(text, today):
     month = None
     month_i = -1
     for i, t in enumerate(toks):
-        if len(t) >= 3 and _month_index(t) and t[:3] in [x.lower()[:3] for x in MONTHS]:
+        if _month_index(t):
+            if t == 'may':
+                prev = toks[i - 1] if i > 0 else ''
+                nxt = toks[i + 1] if i + 1 < len(toks) else ''
+                if not (prev == 'of' or word_number(prev) is not None or word_number(nxt) is not None):
+                    continue
             month = _month_index(t)
             month_i = i
             break
     wd = None
     qual = ''
     for i, t in enumerate(toks):
-        if len(t) >= 3 and _weekday_index(t) is not None and t[:3] in [x.lower() for x in WD_SHORT]:
+        if _weekday_index(t) is not None:
             wd = _weekday_index(t)
             if i > 0 and toks[i - 1] in ('this', 'next', 'coming'):
                 qual = 'next' if toks[i - 1] == 'next' else 'this'

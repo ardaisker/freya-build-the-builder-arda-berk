@@ -171,13 +171,21 @@ def system_prompt(spec: dict) -> str:
     return "\n".join(lines)
 
 
+def opening_asks(spec):
+    try:
+        return max(1, min(5, int(float((spec.get("opening") or {}).get("max_asks") or 2))))
+    except (TypeError, ValueError):
+        return 2
+
+
 def opening_prompt(spec):
     o = spec.get("opening") or {}
+    asks = opening_asks(spec)
     lines = ["Your only job in this step is to find out whether the person on the line is the customer, {{title}} {{last_name}}.",
              o.get("confirmation_rule", ""),
              "Do not say why you are calling. Do not mention " + ", ".join(o.get("forbidden_before_verification") or ["the account"]) + " to anyone before identity is verified.",
              "If the person asks a question, answer it briefly, then ask again whether you are speaking with {{title}} {{last_name}}.",
-             "Only a clear confirmation counts (yes, that's me, speaking, or the customer's own name). 'Hello', 'go ahead', 'who is this' or silence do not: ask once more. If the second answer is still not a confirmation, say you will call another time, say goodbye, and call transition_to_set_unclear in the same message. Never ask a security question before the confirmation.",
+             "Only a clear confirmation counts (yes, that's me, speaking, or the customer's own name). 'Hello', 'go ahead', 'who is this' or silence do not: ask again. You may ask " + str(asks) + " times in total. If answer number " + str(asks) + " is still not a confirmation, say you will call another time, say goodbye, and call transition_to_set_unclear in the same message. Never ask a security question before the confirmation.",
              "If someone else answered, do not explain the call; the next step handles it. Do not call any tool in this step."]
     return "\n".join(x for x in lines if x)
 
@@ -400,7 +408,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         on_enter = {"type": "tts", "text": opening_text}
     nodes["opening"] = {
         "name": "opening", "node_type": "conversation", "on_enter": on_enter, "on_enter_first_entry_only": True,
-        "task_message": opening_prompt(spec), "max_node_turns": 6, "max_turn_transition": "set_unclear", "truncation_strategy": "keep_all",
+        "task_message": opening_prompt(spec), "max_node_turns": 3 * opening_asks(spec), "max_turn_transition": "set_unclear", "truncation_strategy": "keep_all",
         "extraction_schema": [{"name": "who_answered", "type": "string", "enum_values": ["customer", "third_party", "unclear"], "min_confidence": 0.7,
                                "description": "customer: ONLY when the person clearly confirmed they are the customer (yes, that's me, speaking, or said the customer's own name); 'hello', 'go ahead' or 'who is this' are NOT a confirmation. third_party: a different person answered, or the person says the customer is not available, is someone else, has died, or that this is a wrong number. unclear: anything else (hello, who is this, go ahead, a question)."}],
         "tools": [],

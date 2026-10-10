@@ -21,7 +21,7 @@ try:
     except Exception:
         max_ahead = 1
     okdays = []
-    if 'today' in allowed or 'any' in allowed:
+    if ('today' in allowed or 'any' in allowed) and cb.get('include_today') is not False:
         okdays.append(today)
     nb = next_business(today + datetime.timedelta(days=1))
     if 'next_business' in allowed or 'any' in allowed:

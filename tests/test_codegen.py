@@ -253,3 +253,26 @@ def test_verify_hook_counts_wrong_answers_without_api_fields():
     vars_ = {}
     r = {"data": {"success": True, "match": True}}; exec(code, {"result": r, "vars": vars_}); assert vars_["id_state"] == "verified"
     r = {"data": {"success": False, "problem": "unreadable"}}; vars_ = {}; exec(code, {"result": r, "vars": vars_}); assert "does not count as wrong" in r["data"]["what_to_do_next"] and "id_wrong_n" not in vars_
+
+
+def test_words_that_only_look_like_days_or_months():
+    v = facts([{"product_id": "p1", "type": "credit_card", "past_due": 365, "days_late": 8, "minimum_payment": 109.5, "card_last4": "7740"}])
+    for text in ("next month", "sometime next month", "I may pay later", "after the wedding", "when the market opens", "in a month or so", "monthly"):
+        v["customer_date_text"] = text
+        run("resolve_date", v)
+        assert v["resolved_date"] == "", (text, v["date_verdict"])
+    for text, want in (("the 2nd of May", "2027-05-02"), ("May 3rd", "2027-05-03"), ("Wed", "2026-10-21"), ("Sept 30", "2026-09-30"), ("this Thurs", "2026-10-15")):
+        v["customer_date_text"] = text
+        run("resolve_date", v)
+        assert v["resolved_date"] == want, (text, v["resolved_date"])
+
+
+def test_callback_without_today():
+    spec = copy.deepcopy(SPEC)
+    spec["third_party"]["callback"].update({"allowed_days": "any_business_day_within_3", "max_days_ahead": 3, "include_today": False, "from": "08:30", "to": "17:30", "ask_again_once": False})
+    v = run_spec("tp_resolve", {"now": NOW, "callback_day_text": "today", "callback_time_text": "3 pm"}, spec)
+    assert v["tp_status"] == "no"
+    v = run_spec("tp_resolve", {"now": NOW, "callback_day_text": "Monday", "callback_time_text": "9 am"}, spec)
+    assert v["tp_status"] == "ok" and v["callback_date"] == "2026-10-19"
+    v = run_spec("tp_resolve", {"now": NOW, "callback_day_text": "next Tuesday", "callback_time_text": "9 am"}, spec)
+    assert v["tp_status"] == "no"      # the 4th business day ahead

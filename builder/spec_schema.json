@@ -15,12 +15,13 @@
     "unclear_outcome": {
       "outcome": "enum",
       "reason": "enum or empty"
-    }
+    },
+    "max_asks": "number: how many times in total the agent may ask whether it is speaking with the customer before closing as unclear"
   },
   "third_party": {
     "rules": "what to say and not say when someone else answers",
     "callback": {
-      "allowed_days": "today_or_next_business_day | today | next_business_day | any_business_day_within_N (describe)",
+      "allowed_days": "today_or_next_business_day | next_business_day | any_business_day_within_N (set max_days_ahead to N business days)",
       "max_days_ahead": 1,
       "from": "HH:MM",
       "to": "HH:MM",
@@ -33,7 +34,8 @@
       "fail_outcome": {
         "outcome": "enum",
         "reason": "enum"
-      }
+      },
+      "include_today": "true | false: whether a callback may be booked for today"
     },
     "wrong_number": {
       "outcome": "enum",
