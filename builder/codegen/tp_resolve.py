@@ -8,13 +8,24 @@ try:
         attempts = int(float(getv('tp_attempts', '0') or 0))
     except Exception:
         attempts = 0
-    attempts += 1
-    vars['tp_attempts'] = str(attempts)
     d, dstatus = parse_day_text(day_text, today)
-    if d is None and day_text in ('', '-'):
-        d = today
-        dstatus = 'ok'
     t = parse_time_text(time_text)
+    if day_text in ('', '-') and str(getv('tp_day_keep', '')):
+        try:
+            d = datetime.date.fromisoformat(str(getv('tp_day_keep', '')))
+            dstatus = 'ok'
+        except Exception:
+            pass
+    if not t and str(getv('tp_time_keep', '')):
+        t = str(getv('tp_time_keep', ''))
+    complete = (d is not None) and bool(t)
+    vars['tp_day_keep'] = d.isoformat() if d is not None else ''
+    vars['tp_time_keep'] = t
+    if complete:
+        attempts += 1
+        vars['tp_attempts'] = str(attempts)
+        vars['tp_day_keep'] = ''
+        vars['tp_time_keep'] = ''
     allowed = str(cb.get('allowed_days') or 'today_or_next_business_day')
     try:
         max_ahead = int(cb.get('max_days_ahead', 1))
@@ -46,7 +57,10 @@ try:
             problems.append(t + ' is outside ' + frm + ' to ' + to)
         if d is not None and d == today and cb.get('must_be_after_now', True) and t <= now_time:
             problems.append(t + ' today is not later than now (' + now_time + ')')
-    if not problems:
+    if not complete:
+        vars['tp_status'] = 'retry'
+        vars['tp_verdict'] = 'CALLBACK CHECK: ' + ('the day is known (' + fmt(d) + ') but not the time: ask at what time.' if d is not None else ('the time is known (' + t + ') but not the day: ask on which day.' if t else 'no day and no time were understood: ask when the customer can be reached, with day and time.'))
+    elif not problems:
         vars['callback_date'] = d.isoformat()
         vars['callback_time'] = t
         vars['callback_say'] = fmt(d) + ' at ' + t

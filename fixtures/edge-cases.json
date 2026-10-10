@@ -1661,17 +1661,11 @@
    "date_of_birth": "1987-06-03",
    "phone_last4": "2288"
   },
-  "script": "Confirms she is Sofia Almeida. Date of birth 3 June 1987, last four digits 2288. Cannot pay all today. Agrees to pay the credit card this Friday and confirms. Then says for the loans she needs a new payment plan with smaller instalments.",
+  "script": "Confirms she is Sofia Almeida. Date of birth 3 June 1987, last four digits 2288. Cannot pay all today. Says she can pay the credit card this Friday, and in the same breath says that for the loans she needs a new payment plan with smaller instalments.",
   "expected": {
    "outcome": "transferred",
    "reason": "restructuring",
-   "promises": [
-    {
-     "product_id": "p1",
-     "amount": 220,
-     "date": "2026-10-16"
-    }
-   ],
+   "promises": [],
    "notes": [],
    "callbacks": [],
    "transfers": [
@@ -1681,9 +1675,10 @@
    ]
   },
   "checks": [
-   "the credit card promise stays recorded",
+   "no plan is described",
    "no notes added",
-   "transfer_to_agent called with queue restructuring"
+   "transfer_to_agent called with queue restructuring",
+   "a promise that was not yet read back and confirmed is not recorded"
   ]
  },
  {

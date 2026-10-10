@@ -515,7 +515,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
     d = idn.get("decline") or {}
     decline_rule = ("If the customer does not want to answer or asks what the call is about instead of answering: say once, in these words, 'These questions protect your account.' then ask the question again. (" + (d.get("explain_once") or "explain once that the questions protect their account") + ")" +
                     (" Asking what the call is about instead of answering counts as declining." if d.get("asking_why_counts_as_decline") else "") +
-                    " On the SECOND refusal, say that you cannot continue without the security check, say goodbye, and in the same message call transition_to_set_declined. Never call it on a first refusal and never when the customer gave an answer.")
+                    " A short question back such as 'why do you need that?' or 'which account is this about?' is NOT a refusal: answer it in one sentence (the questions protect the account; you can explain after the check) and ask the question again. On the SECOND real refusal, say that you cannot continue without the security check, say goodbye, and in the same message call transition_to_set_declined. Never call it on a first refusal and never when the customer gave an answer.")
     fail_o = first_set((idn.get("fail") or {}).get("outcome"), (idn.get("decline") or {}).get("outcome"), exh_o)
     decl_o = first_set((idn.get("decline") or {}).get("outcome"), fail_o)
     for i, q in enumerate(qs):
@@ -535,7 +535,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         task = "\n".join(x for x in [
             f"Security question {i + 1} of {len(qs)}: {q.get('ask', '')}",
             f"When the customer answers, call verify_identity with the answer formatted as: {q.get('answer_format', '')}. {q.get('notes', '')}".strip(),
-            "Call the tool with the answer as soon as it is complete, even if the customer's sentence trailed off or added other words. A year may be said in words ('nineteen ninety' is 1990, 'twenty twenty-six' is 2026). Only if a piece is clearly missing (only a year, only a day and month, fewer digits than asked) ask once for the missing piece and combine the parts; a partial answer is not a wrong answer, so do not say it is incorrect; never ask for a piece the customer already gave.",
+            "Call the tool with the answer as soon as it is complete, even if the customer's sentence trailed off or added other words. A year may be said in words ('nineteen ninety' is 1990, 'twenty twenty-six' is 2026). A partial answer sent to the tool costs the customer one of their attempts, so never send one: if a piece is clearly missing (only a year, only a day and month, fewer digits than asked, or the customer stops halfway) wait or ask for the rest, then combine the parts into one answer; a partial answer is not a wrong answer, so do not say it is incorrect; never ask for a piece the customer already gave.",
             "Then follow the what_to_do_next line of the tool result exactly. Ask only this question; never ask any other security question or invent one.",
             "EVERY answer the customer gives to this question must be sent to verify_identity, including a repeated or corrected answer. Never judge an answer yourself and never skip the tool call.",
             f"A wrong answer may be asked again. {idn.get('max_wrong_total', 3)} wrong answers in total end the check; the tool result tells you how many are left.",

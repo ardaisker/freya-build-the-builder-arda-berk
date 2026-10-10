@@ -276,3 +276,18 @@ def test_callback_without_today():
     assert v["tp_status"] == "ok" and v["callback_date"] == "2026-10-19"
     v = run_spec("tp_resolve", {"now": NOW, "callback_day_text": "next Tuesday", "callback_time_text": "9 am"}, spec)
     assert v["tp_status"] == "no"      # the 4th business day ahead
+
+
+def test_callback_in_two_parts_and_next_week_weekday():
+    v = run("tp_resolve", {"now": NOW, "callback_day_text": "Sunday", "callback_time_text": "-"})
+    assert v["tp_status"] == "retry" and "not the time" in v["tp_verdict"] and v.get("tp_attempts") in (None, "0")
+    v["callback_day_text"] = "-"; v["callback_time_text"] = "in the morning at 10"
+    run("tp_resolve", v)
+    assert v["tp_status"] == "retry" and v["tp_attempts"] == "1"          # Sunday 10:00: complete and outside the window, the one retry
+    v["callback_day_text"] = "tomorrow"; v["callback_time_text"] = "2 pm"
+    run("tp_resolve", v)
+    assert v["tp_status"] == "ok" and v["callback_date"] == "2026-10-15" and v["callback_time"] == "14:00"
+    w = facts([{"product_id": "p1", "type": "personal_loan", "past_due": 540, "days_late": 5, "instalment_amount": 180}])
+    w["customer_date_text"] = "next week, on Thursday"
+    run("resolve_date", w)
+    assert w["resolved_date"] == "2026-10-22"

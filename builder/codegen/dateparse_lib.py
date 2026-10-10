@@ -201,6 +201,8 @@ def parse_day_text(text, today):
             d = datetime.date(y + 1, month, day)
         return d, 'ok'
     if wd is not None:
+        if qual == '' and re.search(r'next week|following week|week after this', s) and 'week after next' not in s:
+            qual = 'next'
         if qual == '' and str(getv('vague_hint', '')) in ('next', 'this'):
             qual = str(getv('vague_hint', ''))     # "next week" was said earlier, then a bare weekday
         return resolve_weekday(today, wd, qual), 'ok'
