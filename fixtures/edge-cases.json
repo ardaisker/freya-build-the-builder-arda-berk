@@ -1254,5 +1254,505 @@
    "floor 400 offered once, with the note that the rest stays overdue",
    "promise 400 on Friday 16 October"
   ]
+ },
+ {
+  "id": "E28",
+  "base": "PUB-03",
+  "brief": "A",
+  "family": "Identity",
+  "level": "medium",
+  "title": "Numeric date of birth, day first",
+  "variables": {
+   "first_name": "Owen",
+   "last_name": "Park",
+   "title": "Mr",
+   "now": "2026-10-14T11:00"
+  },
+  "products": [
+   {
+    "type": "credit_card",
+    "card_last4": "0377",
+    "past_due": 95.0,
+    "days_late": 4,
+    "minimum_payment": 28.5
+   }
+  ],
+  "identity": {
+   "date_of_birth": "1992-07-21",
+   "phone_last4": "6630"
+  },
+  "script": "Confirms he is Owen Park. Gives his date of birth only as numbers, day first: '21/7/1992'. Last four digits 6630. Pays the full amount today and confirms.",
+  "expected": {
+   "outcome": "promise",
+   "reason": null,
+   "promises": [
+    {
+     "product_id": "p1",
+     "amount": 95,
+     "date": "2026-10-14"
+    }
+   ],
+   "notes": [],
+   "callbacks": [],
+   "transfers": []
+  },
+  "checks": [
+   "the numeric date is read as day, month, year and passes at the first attempt",
+   "promise recorded for today"
+  ]
+ },
+ {
+  "id": "E29",
+  "base": "PUB-08",
+  "brief": "A",
+  "family": "Identity",
+  "level": "medium",
+  "title": "One wrong answer, then right",
+  "variables": {
+   "first_name": "Hannah",
+   "last_name": "Schmidt",
+   "title": "Ms",
+   "now": "2026-10-14T11:00"
+  },
+  "products": [
+   {
+    "type": "credit_card",
+    "card_last4": "5512",
+    "past_due": 180.0,
+    "days_late": 5,
+    "minimum_payment": 54.0
+   }
+  ],
+  "identity": {
+   "date_of_birth": "1993-04-28",
+   "phone_last4": "3317"
+  },
+  "script": "Confirms she is Hannah Schmidt. First gives a wrong date of birth, 2 February 1980. When asked again gives the right one: 28 April 1993. Last four digits 3317. Pays the full amount today and confirms.",
+  "expected": {
+   "outcome": "promise",
+   "reason": null,
+   "promises": [
+    {
+     "product_id": "p1",
+     "amount": 180,
+     "date": "2026-10-14"
+    }
+   ],
+   "notes": [],
+   "callbacks": [],
+   "transfers": []
+  },
+  "checks": [
+   "after the wrong answer the agent asks the same question again",
+   "identity passes on the second answer",
+   "promise recorded for today"
+  ]
+ },
+ {
+  "id": "E30",
+  "base": "PUB-01",
+  "brief": "A",
+  "family": "Dates",
+  "level": "hard",
+  "title": "Early band, asks for a date after the deadline",
+  "variables": {
+   "first_name": "Daniel",
+   "last_name": "Reyes",
+   "title": "Mr",
+   "now": "2026-10-14T11:00"
+  },
+  "products": [
+   {
+    "type": "credit_card",
+    "card_last4": "4821",
+    "past_due": 420.0,
+    "days_late": 6,
+    "minimum_payment": 126.0
+   }
+  ],
+  "identity": {
+   "date_of_birth": "1988-03-14",
+   "phone_last4": "4471"
+  },
+  "script": "Confirms he is Daniel Reyes. Date of birth 14 March 1988, last four digits 4471. Cannot pay today. Says he can pay on 10 November. Accepts the latest possible date when it is offered and confirms.",
+  "expected": {
+   "outcome": "promise",
+   "reason": null,
+   "promises": [
+    {
+     "product_id": "p1",
+     "amount": 420,
+     "date": "2026-11-02"
+    }
+   ],
+   "notes": [],
+   "callbacks": [],
+   "transfers": []
+  },
+  "checks": [
+   "agent says the latest date it can record is Monday 2 November and offers it",
+   "his own date is not counted as a refusal",
+   "promise on 2 November"
+  ]
+ },
+ {
+  "id": "E31",
+  "base": "PUB-07",
+  "brief": "A",
+  "family": "Dates",
+  "level": "hard",
+  "title": "Vague, then a weekday",
+  "variables": {
+   "first_name": "Samuel",
+   "last_name": "Ortiz",
+   "title": "Mr",
+   "now": "2026-10-14T11:00"
+  },
+  "products": [
+   {
+    "type": "personal_loan",
+    "past_due": 540.0,
+    "days_late": 5,
+    "instalment_amount": 180.0
+   }
+  ],
+  "identity": {
+   "date_of_birth": "1975-12-05",
+   "phone_last4": "7093"
+  },
+  "script": "Confirms he is Samuel Ortiz. Date of birth 5 December 1975, last four digits 7093. Cannot pay today. Says 'next week'. When asked for the exact day says Thursday. Confirms at the read-back.",
+  "expected": {
+   "outcome": "promise",
+   "reason": null,
+   "promises": [
+    {
+     "product_id": "p1",
+     "amount": 540,
+     "date": "2026-10-22"
+    }
+   ],
+   "notes": [],
+   "callbacks": [],
+   "transfers": []
+  },
+  "checks": [
+   "agent asks once for the exact day",
+   "Thursday is read as Thursday 22 October",
+   "promise on 22 October"
+  ]
+ },
+ {
+  "id": "E32",
+  "base": "PUB-06",
+  "brief": "A",
+  "family": "Change at read-back",
+  "level": "hard",
+  "title": "Changes the date at the read-back",
+  "variables": {
+   "first_name": "Priya",
+   "last_name": "Nair",
+   "title": "Ms",
+   "now": "2026-10-14T11:00"
+  },
+  "products": [
+   {
+    "type": "credit_card",
+    "card_last4": "1903",
+    "past_due": 2125.1,
+    "days_late": 12,
+    "minimum_payment": 637.5
+   }
+  ],
+  "identity": {
+   "date_of_birth": "1986-05-17",
+   "phone_last4": "1502"
+  },
+  "script": "Confirms she is Priya Nair. Date of birth 17 May 1986, last four digits 1502. Says she can pay the full amount this Friday. At the read-back says 'actually make it Monday'. Confirms the second read-back.",
+  "expected": {
+   "outcome": "promise",
+   "reason": null,
+   "promises": [
+    {
+     "product_id": "p1",
+     "amount": 2125.1,
+     "date": "2026-10-19"
+    }
+   ],
+   "notes": [],
+   "callbacks": [],
+   "transfers": []
+  },
+  "checks": [
+   "agent reads the new date back again before recording",
+   "create_promise called exactly once, for Monday 19 October"
+  ]
+ },
+ {
+  "id": "E33",
+  "base": "PUB-09",
+  "brief": "A",
+  "family": "Transfer after promise",
+  "level": "hard",
+  "title": "Promise recorded, then asks for a plan",
+  "variables": {
+   "first_name": "Victor",
+   "last_name": "Ionescu",
+   "title": "Mr",
+   "now": "2026-10-14T11:00"
+  },
+  "products": [
+   {
+    "type": "personal_loan",
+    "past_due": 2100.0,
+    "days_late": 28,
+    "instalment_amount": 700.0
+   }
+  ],
+  "identity": {
+   "date_of_birth": "1981-08-11",
+   "phone_last4": "5560"
+  },
+  "script": "Confirms he is Victor Ionescu. Date of birth 11 August 1981, last four digits 5560. Agrees to pay 700 this Friday and confirms. After the promise is recorded, asks whether the rest can be put on a new payment plan.",
+  "expected": {
+   "outcome": "transferred",
+   "reason": "restructuring",
+   "promises": [
+    {
+     "product_id": "p1",
+     "amount": 700,
+     "date": "2026-10-16"
+    }
+   ],
+   "notes": [],
+   "callbacks": [],
+   "transfers": [
+    {
+     "queue": "restructuring"
+    }
+   ]
+  },
+  "checks": [
+   "the promise stays recorded",
+   "agent does not describe a plan",
+   "transfer_to_agent called with queue restructuring and the call closes as transferred"
+  ]
+ },
+ {
+  "id": "E34",
+  "base": "PUB-05",
+  "brief": "A",
+  "family": "Dates",
+  "level": "medium",
+  "title": "Names the deadline exactly",
+  "variables": {
+   "first_name": "Tomas",
+   "last_name": "Novak",
+   "title": "Mr",
+   "now": "2026-10-14T11:00"
+  },
+  "products": [
+   {
+    "type": "personal_loan",
+    "past_due": 780.0,
+    "days_late": 21,
+    "instalment_amount": 260.0
+   }
+  ],
+  "identity": {
+   "date_of_birth": "1990-09-09",
+   "phone_last4": "8846"
+  },
+  "script": "Confirms he is Tomas Novak. Date of birth 9 September 1990, last four digits 8846. Cannot pay today. Says he can pay on Friday 23 October. Confirms.",
+  "expected": {
+   "outcome": "promise",
+   "reason": null,
+   "promises": [
+    {
+     "product_id": "p1",
+     "amount": 780,
+     "date": "2026-10-23"
+    }
+   ],
+   "notes": [],
+   "callbacks": [],
+   "transfers": []
+  },
+  "checks": [
+   "23 October is accepted (it is the deadline)",
+   "promise on 23 October"
+  ]
+ },
+ {
+  "id": "E35",
+  "base": "PUB-04",
+  "brief": "A",
+  "family": "Already paid",
+  "level": "medium",
+  "title": "Says she paid after a date was discussed",
+  "variables": {
+   "first_name": "Lena",
+   "last_name": "Hoffmann",
+   "title": "Ms",
+   "now": "2026-10-14T11:00"
+  },
+  "products": [
+   {
+    "type": "car_loan",
+    "past_due": 1250.0,
+    "days_late": 14,
+    "instalment_amount": 400.0
+   }
+  ],
+  "identity": {
+   "date_of_birth": "1984-01-30",
+   "phone_last4": "2219"
+  },
+  "script": "Confirms she is Lena Hoffmann. Date of birth 30 January 1984, last four digits 2219. Cannot pay today. When asked for a date, says she actually paid the full amount yesterday through the app.",
+  "expected": {
+   "outcome": "paid",
+   "reason": null,
+   "promises": [],
+   "notes": [],
+   "callbacks": [],
+   "transfers": []
+  },
+  "checks": [
+   "agent says payments can take one business day to appear",
+   "no promise recorded",
+   "closed as paid"
+  ]
+ },
+ {
+  "id": "E36",
+  "base": "PUB-11",
+  "brief": "B",
+  "family": "Multi-product",
+  "level": "hard",
+  "title": "Restructuring after one promise, several products",
+  "variables": {
+   "first_name": "Sofia",
+   "last_name": "Almeida",
+   "title": "Ms",
+   "now": "2026-10-14T11:00"
+  },
+  "products": [
+   {
+    "type": "credit_card",
+    "card_last4": "2288",
+    "past_due": 220.0,
+    "days_late": 9,
+    "minimum_payment": 66.0
+   },
+   {
+    "type": "personal_loan",
+    "past_due": 640.0,
+    "days_late": 9,
+    "instalment_amount": 213.0
+   },
+   {
+    "type": "car_loan",
+    "past_due": 75.0,
+    "days_late": 3,
+    "instalment_amount": 25.0
+   }
+  ],
+  "identity": {
+   "date_of_birth": "1987-06-03",
+   "phone_last4": "2288"
+  },
+  "script": "Confirms she is Sofia Almeida. Date of birth 3 June 1987, last four digits 2288. Cannot pay all today. Agrees to pay the credit card this Friday and confirms. Then says for the loans she needs a new payment plan with smaller instalments.",
+  "expected": {
+   "outcome": "transferred",
+   "reason": "restructuring",
+   "promises": [
+    {
+     "product_id": "p1",
+     "amount": 220,
+     "date": "2026-10-16"
+    }
+   ],
+   "notes": [],
+   "callbacks": [],
+   "transfers": [
+    {
+     "queue": "restructuring"
+    }
+   ]
+  },
+  "checks": [
+   "the credit card promise stays recorded",
+   "no notes added",
+   "transfer_to_agent called with queue restructuring"
+  ]
+ },
+ {
+  "id": "E37",
+  "base": "PUB-12",
+  "brief": "B",
+  "family": "Multi-product",
+  "level": "medium",
+  "title": "Pays all three today",
+  "variables": {
+   "first_name": "Marcus",
+   "last_name": "Bell",
+   "title": "Mr",
+   "now": "2026-10-14T11:00"
+  },
+  "products": [
+   {
+    "type": "credit_card",
+    "card_last4": "9015",
+    "past_due": 510.0,
+    "days_late": 16,
+    "minimum_payment": 153.0
+   },
+   {
+    "type": "personal_loan",
+    "past_due": 1320.0,
+    "days_late": 16,
+    "instalment_amount": 440.0
+   },
+   {
+    "type": "car_loan",
+    "past_due": 140.0,
+    "days_late": 7,
+    "instalment_amount": 46.0
+   }
+  ],
+  "identity": {
+   "date_of_birth": "1983-10-19",
+   "phone_last4": "4410"
+  },
+  "script": "Confirms he is Marcus Bell. Date of birth 19 October 1983, last four digits 4410. Says he can pay all three today. Confirms once at the read-back.",
+  "expected": {
+   "outcome": "promise",
+   "reason": null,
+   "promises": [
+    {
+     "product_id": "p1",
+     "amount": 510,
+     "date": "2026-10-14"
+    },
+    {
+     "product_id": "p2",
+     "amount": 1320,
+     "date": "2026-10-14"
+    },
+    {
+     "product_id": "p3",
+     "amount": 140,
+     "date": "2026-10-14"
+    }
+   ],
+   "notes": [],
+   "callbacks": [],
+   "transfers": []
+  },
+  "checks": [
+   "all three products stated before any ask",
+   "one read-back and one confirmation",
+   "one create_promise per product",
+   "no notes added"
+  ]
  }
 ]
