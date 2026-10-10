@@ -90,6 +90,10 @@ def test_resolve_this_friday_and_words():
     v["customer_date_text"] = "the twenty-second of October"
     run("resolve_date", v)
     assert v["resolved_date"] == "2026-10-22"
+    for text in ("six hundred and thirty-seven dollars and fifty cents on Friday the sixteenth of October twenty twenty-six", "Friday the sixteenth of October twenty twenty-six", "October sixteenth", "the sixteenth of October 2026", "on the 16th of October", "I can pay it on Friday"):
+        v["customer_date_text"] = text
+        run("resolve_date", v)
+        assert v["resolved_date"] == "2026-10-16", (text, v["date_verdict"])
 
 
 def test_tp_callback_window():

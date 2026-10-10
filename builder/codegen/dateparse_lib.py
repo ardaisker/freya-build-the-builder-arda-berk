@@ -100,11 +100,16 @@ def parse_day_text(text, today):
             return d, 'ok'
         except Exception:
             return None, 'unknown'
+    s = re.sub(r'\b(twenty|two thousand)( and)? (twenty|thirty)?[- ]?(one|two|three|four|five|six|seven|eight|nine)?\b(?=\s*$|\s*[^a-z])', ' ', s)
+    s = re.sub(r'\btwenty twenty\b', ' ', s)
+    s = re.sub(r'\s+', ' ', s).strip()
     toks = s.split()
     month = None
-    for t in toks:
+    month_i = -1
+    for i, t in enumerate(toks):
         if len(t) >= 3 and _month_index(t) and t[:3] in [x.lower()[:3] for x in MONTHS]:
             month = _month_index(t)
+            month_i = i
             break
     wd = None
     qual = ''
@@ -119,6 +124,21 @@ def parse_day_text(text, today):
     m = re.search(r'\b(20\d\d)\b', s)
     if m:
         year = int(m.group(1))
+    if month_i >= 0:
+        # the day is the number right before "of <month>" / "<month>" or right after the month name
+        before = [t for t in toks[max(0, month_i - 3):month_i] if t not in ('of', 'the', 'on')]
+        after = toks[month_i + 1:month_i + 3]
+        for group in (before[::-1], after):
+            acc = []
+            for t in group:
+                acc.insert(0, t) if group is before[::-1] else acc.append(t)
+                v = word_number(' '.join(acc))
+                if v is not None and 1 <= v <= 31:
+                    day = v
+                if v is None:
+                    break
+            if day is not None:
+                break
     for t in toks:
         if re.match(r'^\d\d?(st|nd|rd|th)?$', t) and not (year and t == str(year)):
             v = int(re.sub(r'\D', '', t))

@@ -425,7 +425,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         task = "\n".join(x for x in [
             f"Security question {i + 1} of {len(qs)}: {q.get('ask', '')}",
             f"When the customer answers, call verify_identity with the answer formatted as: {q.get('answer_format', '')}. {q.get('notes', '')}".strip(),
-            "Call the tool with the answer exactly as the customer gave it, at once, even if their sentence trailed off or added other words. Do not ask for 'the rest' of an answer yourself: if something is unreadable the tool result says so and that does not count as wrong. Only when the customer explicitly says they will continue (for example 'the first two digits are four four') wait for the rest.",
+            "Call the tool with the answer as soon as it is complete, even if the customer's sentence trailed off or added other words. A year may be said in words ('nineteen ninety' is 1990, 'twenty twenty-six' is 2026). Only if a piece is clearly missing (a date with no year, fewer digits than asked) ask once for the missing piece and combine the parts; never ask for a piece the customer already gave.",
             "Then follow the what_to_do_next line of the tool result exactly. Ask only this question; never ask any other security question or invent one.",
             "EVERY answer the customer gives to this question must be sent to verify_identity, including a repeated or corrected answer. Never judge an answer yourself and never skip the tool call.",
             f"A wrong answer may be asked again. {idn.get('max_wrong_total', 3)} wrong answers in total end the check; the tool result tells you how many are left.",
