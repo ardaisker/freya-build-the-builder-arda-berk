@@ -49,6 +49,7 @@ try:
     if not problems:
         vars['callback_date'] = d.isoformat()
         vars['callback_time'] = t
+        vars['callback_say'] = fmt(d) + ' at ' + t
         vars['tp_status'] = 'ok'
         vars['tp_verdict'] = 'CALLBACK CHECK: ' + fmt(d) + ' at ' + t + ' is inside the window. Confirm it to the caller and say goodbye.'
     else:

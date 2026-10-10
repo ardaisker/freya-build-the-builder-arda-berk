@@ -354,8 +354,8 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         "extraction_schema": [
             {"name": "tp_result", "type": "string", "enum_values": ["callback_time_given", "wrong_number", "deceased", "no_callback", "other"], "min_confidence": 0.5,
              "description": "callback_time_given: the person named a day and/or a time when the customer can be reached. wrong_number: the person says this number does not belong to the customer. deceased: the person says the customer has died. no_callback: the person refuses to give any time or says the customer cannot be reached. other: anything else."},
-            {"name": "callback_day_text", "type": "string", "min_confidence": 0.4, "description": "The day the person named for reaching the customer, exactly as said (today, tomorrow, Friday, the 16th...). Empty if no day was named in the last message."},
-            {"name": "callback_time_text", "type": "string", "min_confidence": 0.4, "description": "The time of day the person named, exactly as said (around eleven, 3 pm, half past five, in the morning). Empty if no time was named in the last message."},
+            {"name": "callback_day_text", "type": "string", "min_confidence": 0.4, "description": "The day the person named for reaching the customer, exactly as said (today, tomorrow, Friday, the 16th...). Empty if no day was named in the last message, or if the message ends with a correction that was cut off ('sorry,', 'I mean')."},
+            {"name": "callback_time_text", "type": "string", "min_confidence": 0.4, "description": "The time of day the person named, exactly as said (around eleven, 3 pm, half past five, in the morning). Empty if no time was named in the last message, or if the message ends with a correction that was cut off ('sorry,', 'I mean')."},
         ],
         "tools": [],
         "transitions": [
@@ -384,7 +384,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
     wn_o = oc(tp.get("wrong_number"), ("not_reached", "wrong_number"))
     dc_o = oc((tp.get("deceased") or {}).get("outcome"), ("not_reached", "deceased"))
     nodes["set_callback_ok"] = set_node("set_callback_ok", ok_o[0], ok_o[1], "end_callback")
-    nodes["end_callback"] = end_node("end_callback", "Thank you. We will call back on {{callback_date}} at {{callback_time}}. Goodbye.")
+    nodes["end_callback"] = end_node("end_callback", "Thank you. We will call back on {{callback_say}}. Goodbye.")
     nodes["set_no_callback"] = set_node("set_no_callback", no_o[0], no_o[1], "end_no_callback")
     nodes["end_no_callback"] = end_node("end_no_callback", "I understand. We will try again another time. Thank you, goodbye.")
     nodes["set_wrong_number"] = set_node("set_wrong_number", wn_o[0], wn_o[1], "end_wrong_number")
@@ -572,7 +572,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
                 {"name": "dispute_flag", "type": "string", "enum_values": ["dispute"], "min_confidence": 0.6,
                  "description": "dispute: the customer says the debt is not theirs, they never had this product, or the product was closed or paid off in the past. Otherwise leave empty."},
                 {"name": "customer_date_text", "type": "string", "min_confidence": 0.5,
-                 "description": "A payment day the customer named in their LAST message, copied exactly as they said it (for example: this Friday, Monday the 26th, 6 November, the week after next, tomorrow). Leave empty if the last message names no day. Never fill it from earlier messages."},
+                 "description": "A payment day the customer named in their LAST message, copied exactly as they said it (for example: this Friday, Monday the 26th, 6 November, the week after next, tomorrow). Leave empty if the last message names no day, or if the message ends with a correction that was cut off ('sorry,', 'I mean'). Never fill it from earlier messages."},
             ],
             "tools": ntools,
             "transitions": [

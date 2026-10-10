@@ -113,6 +113,7 @@ def test_tp_callback_window():
     v = {"now": NOW, "callback_day_text": "tomorrow morning", "callback_time_text": "around eleven"}
     run("tp_resolve", v)
     assert v["tp_status"] == "ok" and v["callback_date"] == "2026-10-15" and v["callback_time"] == "11:00"
+    assert v["callback_say"] == "Thursday 15 October 2026 at 11:00"
     v = {"now": NOW, "callback_day_text": "Saturday", "callback_time_text": "10 am"}
     run("tp_resolve", v)
     assert v["tp_status"] == "retry"
