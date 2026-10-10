@@ -13,6 +13,15 @@ Durum ve sahipler burada. Her commit'te güncellenir. Sunucuda: `cd /root/hackat
 - `fixtures/edge-cases.json`: 37 senaryo, 13 müşteri üzerinde (mock özel müşteri kabul etmiyor). Koşturma: `python3 builder/run_custom.py <agent_id> [--only E01,E02] [--reps 2] [--style ...]`.
 - Sonuçlar: A v20 20/27 → A v21 25/27 → A+B v21 27/27 → **A v23 37/37 iki tekrarda**; 2. parti A+B v22 10/10; 3. parti (E38-E42) A v24 5/5 + 4/5 (E39 judge varyansı); in_words stiliyle 42 vaka A v24 39/42 → saat sözcüğü, kısmi cevap, not tamlığı düzeltildi → yeniden ölçümde 3/3 × 2. Regresyon kapısı A v24 10/10 × 2, v25 9+10 (PUB-06 taban iki kez → 'bir kez teklif' kuralı, v26).
 
+## Genelleme katmanı (Cmt gece, Opus oturumu)
+Gizli brief'lerde alan adları, değerler ve kurallar değişecek; builder artık hiçbirini sabit bilmiyor:
+- `builder/apimap.py`: her araç alanı / yanıt bayrağı / outcome değeri `openapi.json`'dan okunur (model bölümü + ad kalıbı yedeği).
+- Deadline, ikna teklifleri, taban tutar, hafta sonu kaydırma: spec'teki kural nesnelerinden kodda hesaplanır (`codegen/calendar_lib.py`).
+- Çıkarımdan sonra denetim (audit) geçişi: spec brief'e karşı kontrol edilir, kanıtlı düzeltmeler uygulanır (memo geçersiz kılmaları).
+- `build.py`: klasör/çok dosya girdisi, kod adımlarının yerel öz-sınaması, brief'e özgü ek özel durumlar için çıkış düğümleri.
+- Fixture'lar: `renamed-*` (tüm alanlar/değerler yeniden adlandırılmış), `variant-*` (3 kimlik sorusu, takvim günü deadline, 3 teklif, %20 taban, ek durumlar), `raw-bank-material` (mail+politika+memo).
+- `pytest tests/` 15 test (ağsız). Canlı: API eşleme refactor'u A kapı 10/10 × 2, B 3/3 × 2; son aday A v32 / A+B v29 ölçülüyor.
+
 ## Sahipler
 - Arda: builder kodu (`builder/`), final koşular (Mac, Claude Max login).
 - Berk (sunucu): ölçüm koşuları ve hata analizi. LLM gerekmez; `env.sh` yeter.
