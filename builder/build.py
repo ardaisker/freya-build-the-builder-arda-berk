@@ -23,7 +23,7 @@ sys.path.insert(0, str(HERE)); sys.path.insert(0, str(ROOT)); sys.path.insert(0,
 
 from trace import Trace  # noqa: E402
 from llm import LLM  # noqa: E402
-from extract import extract, validate  # noqa: E402
+from extract import audit, extract, validate  # noqa: E402
 from compile import compile_workflow  # noqa: E402
 from lint import lint  # noqa: E402
 from patch import patch_spec  # noqa: E402
@@ -43,6 +43,7 @@ def main():
     ap.add_argument("--budget-min", type=float, default=27.0, help="hard stop for the whole run, minutes")
     ap.add_argument("--slot", default="")
     ap.add_argument("--no-freya", action="store_true", help="stop after lint (offline)")
+    ap.add_argument("--no-audit", action="store_true", help="skip the second model pass that checks the spec against the brief")
     a = ap.parse_args()
     t_start = time.time()
     deadline = t_start + a.budget_min * 60
@@ -67,7 +68,11 @@ def main():
         spec = json.load(open(a.spec))
         trace.log(f"spec loaded from {a.spec} (no model call)")
     else:
-        spec = extract(llm, [(pathlib.Path(b).name, open(b).read()) for b in briefs], openapi)
+        material = [(pathlib.Path(b).name, open(b).read()) for b in briefs]
+        spec = extract(llm, material, openapi)
+        if not a.no_audit:
+            trace.section("1b AUDIT: spec checked against the material")
+            spec = audit(llm, spec, material, openapi, log=trace.log)
     (out_dir / "spec.json").write_text(json.dumps(spec, indent=1, ensure_ascii=False))
     trace.log(f"spec written: {out_dir / 'spec.json'}  identity questions={len(spec.get('identity', {}).get('questions', []))} bands={len(spec.get('bands', []))} holidays={len(spec.get('calendar', {}).get('holidays', []))} special_cases={len(spec.get('special_cases', []))} residual_rules={len(spec.get('residual_rules', []))} multi_product={spec.get('multi_product', {}).get('enabled')}")
 

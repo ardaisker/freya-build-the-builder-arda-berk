@@ -285,7 +285,12 @@ def negotiate_prompt(spec, tools):
     for name, c in cases.items():
         if name in ("hardship", "already_paid", "dispute", "restructuring", "human", "refuses_to_talk", "unknown_question", "scam_question", "robot_or_ai_question") or not c.get("behaviour"):
             continue
-        lines.append(f"{n}. {str(name).replace('_', ' ').upper()}: {c.get('trigger', '')}: {c.get('behaviour', '')}")
+        ex = ""
+        if not c.get("transfer_queue") and oc(c.get("outcome"))[0]:
+            ex = " When the call ends for this reason: thank the customer, say goodbye and call transition_to_case_" + (re.sub(r"[^a-z0-9]+", "_", str(name).lower()).strip("_")[:30] or "case") + " in the same message (not transition_to_finalize)."
+        elif c.get("transfer_queue"):
+            ex = f" To transfer, call transfer_to_agent with queue \"{c['transfer_queue']}\", then say goodbye."
+        lines.append(f"{n}. {str(name).replace('_', ' ').upper()}: {c.get('trigger', '')}: {c.get('behaviour', '')}{ex}")
         n += 1
     lines += [
         f"{n}. CONFIRM AND RECORD: " + " ".join(x for x in [cr.get("readback"), ("Call create_promise only after a clear yes." if cr.get("record_only_after_clear_yes", True) else ""), cr.get("changed_at_readback"), ("One promise per product." if cr.get("one_promise_per_product", True) else ""), cr.get("cannot_change_recorded")] if x) +
@@ -620,7 +625,8 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
                 {"target_node": "finalize", "description": "The call is complete: the goodbye was said after a recorded promise, a refusal, a paid or disputed debt, a hardship case, or a transfer.", "is_tool_call": True,
                  "condition": {"operator": "matches_intent", "description": "The agent has finished the call and said goodbye"}},
                 tr("finalize", "the customer said goodbye", {"operator": "matches_intent", "description": "The customer says goodbye or bye to end the call (for example 'Thank you, goodbye'), not merely thanks or an acknowledgement"}),
-            ],
+            ] + [{"target_node": "case_" + c["_exit"][len("transition_to_case_"):], "description": "The call ends because of this case: " + str(c.get("trigger") or c.get("name")) + ". Call it together with the goodbye.", "is_tool_call": True,
+                  "condition": {"operator": "matches_intent", "description": "the call ends for the case " + str(c.get("name"))}} for c in extra],
         }
         nodes["resolve_date" + suffix] = code_node("resolve_date" + suffix, snippet("resolve_date", libs=LIBS, SPEC=spec), name)
         for flag, case_name, pick in (("hardship", "hardship", "decline_outcome"), ("paid", "already_paid", "outcome"), ("dispute", "dispute", "outcome")):
@@ -630,6 +636,15 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
                 continue
             nodes[f"mark_{flag}{suffix}"] = code_node(f"mark_{flag}{suffix}", "vars['" + flag + "_marked'] = '1'\nif not str(vars.get('promises_log') or ''):\n    vars['call_outcome'] = '" + o[0] + "'\n    vars['call_reason'] = '" + o[1] + "'\n", name)
             nodes[name]["transitions"].insert(0, tr(f"mark_{flag}{suffix}", f"the customer mentioned {flag}", cond_and({"variable": f"{flag}_flag", "operator": "equals", "operand": flag}, {"variable": f"{flag}_marked", "operator": "is_not_set"})))
+
+    # special cases the brief defines beyond the usual ones: each gets its own exit that records its outcome
+    handled = {"hardship", "already_paid", "dispute"}
+    extra = [c for c in (spec.get("special_cases") or []) if isinstance(c, dict) and c.get("name") not in handled and not c.get("transfer_queue") and oc(c.get("outcome"))[0]]
+    for c in extra:
+        slug = re.sub(r"[^a-z0-9]+", "_", str(c.get("name")).lower()).strip("_")[:30] or "case"
+        o_ = oc(c.get("outcome"))
+        nodes["case_" + slug] = code_node("case_" + slug, "vars['case_outcome'] = '" + o_[0] + "'\nvars['case_reason'] = '" + o_[1] + "'\nif not str(vars.get('promises_log') or ''):\n    vars['call_outcome'] = '" + o_[0] + "'\n    vars['call_reason'] = '" + o_[1] + "'\n", "finalize")
+        c["_exit"] = "transition_to_case_" + slug
 
     negotiate_set("", False)
     if "add_note" in T:

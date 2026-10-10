@@ -82,10 +82,19 @@ class LLM:
         t0 = time.time()
         if self.trace:
             self.trace.model_call(model, purpose, started=True)
-        if self.backend == "sdk":
-            text = asyncio.run(_ask_sdk(system, user, model))
-        else:
-            text = _ask_cli(system, user, model)
+        text, last = "", None
+        for attempt in range(3):            # a model call can fail for a moment (rate limit, network): try again before giving up
+            try:
+                text = asyncio.run(_ask_sdk(system, user, model)) if self.backend == "sdk" else _ask_cli(system, user, model)
+                if text.strip():
+                    break
+            except Exception as e:
+                last = e
+            if self.trace:
+                self.trace.log(f"MODEL CALL retry {attempt + 1}: {str(last)[:120] if last else 'empty answer'}")
+            time.sleep(10 * (attempt + 1))
+        if not text.strip() and last is not None:
+            raise last
         took = time.time() - t0
         self.calls.append({"model": model, "purpose": purpose, "seconds": round(took, 1), "chars_in": len(system) + len(user), "chars_out": len(text)})
         if self.trace:

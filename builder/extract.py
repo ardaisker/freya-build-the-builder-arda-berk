@@ -121,6 +121,55 @@ def validate(spec: dict, openapi: dict) -> list[str]:
     return problems
 
 
+AUDIT_SYSTEM = """You audit a policy spec that was extracted from a bank's material. Find only REAL errors: a value in the spec that contradicts the material, a rule of the material that is missing everywhere in the spec (including residual_rules), or a later document (memo, correction) that the spec ignored.
+Answer with ONE JSON object: {"patches": [{"path": "dot.path[0].to.field", "value": <new value>, "evidence": "short quote from the material"}]}.
+Rules: at most 12 patches. No style changes. No patch without a quote that proves it. To add a missing rule use the path "residual_rules[+]". If the spec is right, answer {"patches": []}."""
+
+
+def _set_path(obj, path, value):
+    import re as _re
+    parts = _re.findall(r"[^.\[\]]+|\[\+\]|\[\d+\]", path)
+    cur = obj
+    for i, part in enumerate(parts):
+        last = i == len(parts) - 1
+        if part == "[+]":
+            if not isinstance(cur, list):
+                raise KeyError(path)
+            cur.append(value); return
+        key = int(part[1:-1]) if part.startswith("[") else part
+        if last:
+            cur[key] = value; return
+        cur = cur[key]
+
+
+def audit(llm, spec: dict, briefs: list[tuple[str, str]], openapi: dict, log=print) -> dict:
+    """One more model call: check the spec against the material and apply proven corrections. Never makes the spec less valid."""
+    import copy
+    parts = ["# Spec\n", json.dumps(spec, indent=1, ensure_ascii=False)]
+    for name, text in briefs:
+        parts += [f"\n\n# Material: {name}\n", text]
+    try:
+        out = llm.ask_json("audit the spec against the material, return corrections", AUDIT_SYSTEM, "".join(parts), retries=0)
+    except Exception as ex:
+        log("audit skipped: " + str(ex)[:160]); return spec
+    before = len(validate(spec, openapi))
+    new = copy.deepcopy(spec)
+    applied = 0
+    for pt in (out.get("patches") or [])[:12]:
+        try:
+            trial = copy.deepcopy(new)
+            _set_path(trial, str(pt.get("path")), pt.get("value"))
+            if len(validate(trial, openapi)) <= before:
+                new = trial; applied += 1
+                log("audit patch: " + str(pt.get("path")) + " = " + json.dumps(pt.get("value"))[:120] + "  | " + str(pt.get("evidence"))[:120])
+            else:
+                log("audit patch rejected (makes the spec invalid): " + str(pt.get("path")))
+        except Exception as ex:
+            log("audit patch not applicable: " + str(pt.get("path")) + " (" + type(ex).__name__ + ")")
+    log(f"audit: {applied} correction(s) applied")
+    return new
+
+
 def extract(llm, briefs: list[tuple[str, str]], openapi: dict) -> dict:
     spec = llm.ask_json("read the brief(s) and the tool API, fill the policy spec", SYSTEM, user_prompt(briefs, openapi), retries=1)
     problems = validate(spec, openapi)

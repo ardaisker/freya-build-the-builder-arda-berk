@@ -46,6 +46,8 @@ try:
         promises = [x for x in str(getv('promises_log', '')).split(';') if x]
         if promises or _count('create_promise_success_count') > 0:
             outcome, reason = _promise_outcome()
+    if not outcome and str(getv('case_outcome', '')):
+        outcome, reason = str(getv('case_outcome', '')), str(getv('case_reason', ''))
     if not outcome:
         notes = [x for x in str(getv('notes_log', '')).split(';') if x]
         try:
