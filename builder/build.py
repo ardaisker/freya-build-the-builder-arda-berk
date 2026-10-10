@@ -51,7 +51,7 @@ def main():
     apis = [f for f in a.files if f.endswith(".json")]
     if not briefs or len(apis) != 1:
         sys.exit("give one or more brief .md files and exactly one tool API .json")
-    slot = a.slot or "-".join(slug(b) for b in briefs)
+    slot = a.slot or ("team-" + "-".join(slug(b) for b in briefs))   # own prefix: never the kit example's slot
     out_dir = ROOT / "out" / slot
     out_dir.mkdir(parents=True, exist_ok=True)
     trace = Trace(ROOT / "traces" / f"{slot}-{time.strftime('%Y%m%d-%H%M%S')}.log")
