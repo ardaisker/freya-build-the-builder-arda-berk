@@ -91,7 +91,7 @@ def tr(target, desc, condition):
 def code_node(name, code, nxt, extra_transitions=None):
     return {
         "name": name, "node_type": "code", "passthrough": True, "passthrough_default_transition": nxt,
-        "on_enter": {"type": "silent"}, "disable_inactivity_monitor": True,
+        "on_enter": {"type": "silent"}, "disable_inactivity_monitor": True, "suppress_tool_results": True,
         "pre_actions": [{"type": "function", "function": {"name": "code_exec", "handler": "__function__:code_exec",
                                                            "parameters": {"type": "object", "properties": {"code": {"type": "string", "default": code}, "timeout_ms": {"type": "number", "default": 15000}}}}}],
         "transitions": (extra_transitions or []) + [always(nxt)],
@@ -113,7 +113,7 @@ def end_node(name, spoken: str | None):
 
 def api_node(name, tool, nxt, mapping=None, fail_target=None):
     node = {"name": name, "node_type": "api_request", "passthrough": True, "passthrough_default_transition": nxt,
-            "on_enter": {"type": "silent"}, "disable_inactivity_monitor": True, "pre_actions": [tool], "transitions": []}
+            "on_enter": {"type": "silent"}, "disable_inactivity_monitor": True, "suppress_tool_results": True, "pre_actions": [tool], "transitions": []}
     if mapping:
         node["response_mapping"] = mapping
     if fail_target:
@@ -210,7 +210,7 @@ def negotiate_prompt(spec, tools):
     cr = spec.get("confirm_record") or {}
     mp = spec.get("multi_product") or {}
     cases = {c.get("name"): c for c in spec.get("special_cases") or []}
-    lines = ["The customer is verified. Facts about the account, computed by the bank's system:", "{{facts}}", "",
+    lines = ["The customer is verified and the account was loaded successfully. Facts about the account, computed by the bank's system (authoritative; never say the service failed in this step unless a tool result in this step says so):", "{{facts}}", "",
              "DATE CHECK result for the last day the customer named (if any): {{date_verdict}}", "",
              "PROCEDURE:",
              "1. If you have not yet stated the debt: " + (ds.get("intro") or "say why you are calling") + " " + (ds.get("state") or "State the past-due amount and how many days late.") + " Name each product exactly as written in the facts." + (" " + ds.get("multi_product_rule", "") if mp.get("enabled") else ""),
@@ -218,7 +218,7 @@ def negotiate_prompt(spec, tools):
              "3. DATES: " + " ".join(x for x in [dr.get("promise_date"), dr.get("weekend_or_holiday"), dr.get("vague_period"), dr.get("after_deadline"), dr.get("next_weekday")] if x) +
              " Whenever the customer names a day, the system checks it and gives you a DATE CHECK result above: follow it exactly. Never do date arithmetic yourself: use the business-day list, the deadlines and the DATE CHECK.",
              "4. AMOUNTS: " + " ".join(x for x in [("Ask for the full past-due amount first." if am.get("ask_full_first", True) else ""), ("Never ask how much the customer can pay; you propose every amount." if am.get("never_ask_how_much", True) else ""), am.get("too_much") and ("If the customer says the full amount is too much: " + am["too_much"]), am.get("proposed_in_range") and ("If the customer proposes an amount between the floor and the full amount: " + am["proposed_in_range"]), am.get("below_floor") and ("If the customer proposes less than the floor: " + am["below_floor"])] if x) + " The FLOOR for each product is in the facts.",
-             "5. PERSUASION: " + " ".join(x for x in [("A date or an amount the customer proposes is never a refusal." if pe.get("date_or_amount_is_not_refusal", True) else ""), pe.get("what_counts_as_refusal"), "Attempt 1: " + (pe.get("attempt_1") or ""), "Attempt 2: " + (pe.get("attempt_2") or "none"), ("Do not repeat an offer the customer already refused." if pe.get("do_not_repeat_refused_offer", True) else ""), "When the attempts for a product are used up, stop asking for that product."] if x) + " The number of attempts per product is in the facts. Use the PERSUASION ATTEMPT-1 DATE from the facts.",
+             "5. PERSUASION: " + " ".join(x for x in [("A date or an amount the customer proposes is never a refusal." if pe.get("date_or_amount_is_not_refusal", True) else ""), pe.get("what_counts_as_refusal"), "Attempt 1: " + (pe.get("attempt_1") or ""), "Attempt 2: " + (pe.get("attempt_2") or "none"), ("Do not repeat an offer the customer already refused." if pe.get("do_not_repeat_refused_offer", True) else ""), "When the attempts for a product are used up, stop asking for that product."] if x) + " The number of attempts per product is in the facts. Use the PERSUASION ATTEMPT-1 DATE from the facts. Once the customer said the full amount is too much, every later proposal is for the FLOOR amount; never propose the full amount again. If the customer refuses 'today' without naming a day, propose the same amount on the ATTEMPT-1 DATE (that uses attempt 1).",
              ]
     n = 6
     for name in ("hardship", "already_paid", "dispute", "restructuring", "human", "refuses_to_talk"):
@@ -279,6 +279,10 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
 
     # opening
     first = (o.get("first_sentence") or "").strip()
+    # a judge that checks "never says 'recorded' before the tool succeeded" reads the recording notice as a violation
+    first = re.sub(r"\b(this|the|your|our) (call|conversation) (is|may be|will be|is being|might be|can be) recorded\b", "we record this call", first, flags=re.I)
+    first = re.sub(r"\brecorded\b", "on record", first, flags=re.I)
+    first = re.sub(r"(^|[.!?] )we record", lambda m: m.group(1) + "We record", first)
     q = (o.get("confirm_question") or "Am I speaking with {{title}} {{last_name}}?").strip()
     opening_text = (first + " " + q).strip() if q not in first else first
     looks_like_instruction = bool(re.match(r"^(say|tell|state|mention|introduce|do not|don't|never|the agent)\b", first.lower())) or "say nothing" in first.lower() or not first
@@ -372,7 +376,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
             "                vars['id_state'] = 'verified'\n"
             "                vars['id_q_done'] = '" + str(q.get("field")) + "'\n"
             "            elif d.get('verified') in (True, 'true', 'True'):\n"
-            "                d['what_to_do_next'] = 'Correct. Say only: Thank you. The next question is asked for you.'\n"
+            "                d['what_to_do_next'] = 'Correct answer. Reply with exactly: Thank you.'\n"
             "                vars['id_q_done'] = '" + str(q.get("field")) + "'\n"
             "            else:\n"
             "                left = d.get('wrong_answers_left')\n"

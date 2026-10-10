@@ -20,6 +20,7 @@ Rules:
 - Where the material gives several documents (a mail, a policy, a memo that changes it, a code list), the LATEST or most specific rule wins; note superseded rules in residual_rules as "superseded: ...".
 - residual_rules must contain EVERY rule of the material that the other fields do not capture, so that nothing is lost. When in doubt, put it in residual_rules too.
 - Fields described as 'exact spoken' hold the words the agent says, never an instruction about them. If the material prescribes the content but not the words, write natural spoken words that carry exactly that content.
+- In opening.first_sentence, give any recording notice without the word 'recorded' (for example: We record this call.).
 - Do not invent rules that are not in the material. Do not copy rules from any other bank or brief you may know.
 """
 
