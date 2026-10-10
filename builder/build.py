@@ -29,6 +29,82 @@ from lint import lint  # noqa: E402
 from patch import patch_spec  # noqa: E402
 
 
+def classify(paths):
+    """Sort the command-line paths into brief texts and the tool API file. A folder is read file by file.
+    The tool API is the file that parses as an OpenAPI document, whatever its name."""
+    files = []
+    for p in paths:
+        pp = pathlib.Path(p)
+        if pp.is_dir():
+            files += sorted(str(x) for x in pp.rglob("*") if x.is_file() and not x.name.startswith(".") and x.suffix.lower() in (".md", ".txt", ".json", ".eml", ".csv", ".yaml", ".yml", ""))
+        else:
+            files.append(str(pp))
+    briefs, apis = [], []
+    for f in files:
+        is_api = False
+        try:
+            text = pathlib.Path(f).read_text(errors="replace")
+            if f.lower().endswith((".yaml", ".yml")) and "paths:" in text and "openapi" in text:
+                raise SystemExit("the tool API file is YAML: convert it to JSON first (python3 -c 'import yaml,json,sys; json.dump(yaml.safe_load(open(sys.argv[1])), open(sys.argv[2], \"w\"))' in.yaml out.json)")
+            doc = json.loads(text)
+            is_api = isinstance(doc, dict) and isinstance(doc.get("paths"), dict)
+        except (ValueError, OSError):
+            is_api = False
+        (apis if is_api else briefs).append(f)
+    return briefs, apis
+
+
+def self_check(spec, openapi, wf, trace):
+    """Run every code step of the phone agent locally on a made-up customer built from the tool API, so a step that
+    cannot compute its facts is found before any call. Needs no network."""
+    import apimap
+    A = apimap.resolve(spec, openapi)
+    g = A["tools"].get("get_account") or {}
+    S = dict(spec, api=A)
+    resp = apimap._resp(openapi, "get_account").get("properties") or {}
+    items = ((resp.get(g.get("products", "products")) or {}).get("items") or {}).get("properties") or {}
+    types = (items.get(g.get("type", "type")) or {}).get("enum") or ["product"]
+    bands = spec.get("bands") or [{}]
+    now = "2026-03-11T10:30"
+    ok, total = 0, 0
+    for i, ty in enumerate(types):
+        for b in bands:
+            p = {}
+            for name, sch in items.items():
+                p[name] = {"number": 100.0 + 10 * i, "integer": 1, "string": "1234", "boolean": True}.get(sch.get("type"), "x")
+            p[g.get("product_id", "product_id")] = "p1"
+            p[g.get("type", "type")] = ty
+            p[g.get("past_due", "past_due")] = 900.0
+            p[g.get("days_late", "days_late")] = int(b.get("days_late_min", 1) or 1)
+            v = {A["call_vars"]["now"]: now, "get_account_response.data." + g.get("products", "products"): json.dumps([p])}
+            total += 1
+            try:
+                from codegen import snippet
+                exec(snippet("facts", libs=("calendar_lib", "dateparse_lib"), SPEC=S), {"vars": v})
+                pf = json.loads(v.get("pf_json") or "[]")
+                assert v.get("facts_state") == "ok" and pf and pf[0]["deadline"] and pf[0]["floor"] is not None, "facts not computed"
+                v["customer_date_text"] = "tomorrow"
+                exec(snippet("resolve_date", libs=("calendar_lib", "dateparse_lib"), SPEC=S), {"vars": v})
+                assert v.get("date_status") in ("ok", "not_business", "after_deadline", "partly_after_deadline"), "date check failed"
+                exec(snippet("finalize", libs=("calendar_lib", "dateparse_lib"), SPEC=S), {"vars": dict(v, promises_log="p1;")})
+                ok += 1
+            except Exception as e:
+                trace.test(f"self-check {ty}/{b.get('name')}", "FAILED: " + str(e)[:200])
+    v = {A["call_vars"]["now"]: now, "callback_day_text": "tomorrow", "callback_time_text": "3 pm"}
+    try:
+        from codegen import snippet
+        exec(snippet("tp_resolve", libs=("calendar_lib", "dateparse_lib"), SPEC=S), {"vars": v})
+        cb = v.get("tp_status")
+    except Exception as e:
+        cb = "error " + str(e)[:80]
+    trace.test("self-check code steps", f"{ok} / {total} product type x band combinations computed deadline, floor, offers and outcome; callback check: {cb}")
+    outs = set(A["outcomes"])
+    used = set(re.findall(r"vars\['call_outcome'\] = '([^']*)'", json.dumps(wf).replace("\\'", "'")))
+    bad = sorted(o for o in used if outs and o and o not in outs)
+    trace.test("self-check outcomes", "every outcome the workflow can record is a value of the tool API" if not bad else "NOT in the tool API: " + ", ".join(bad))
+    return ok == total and not bad
+
+
 def slug(path: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", pathlib.Path(path).stem.lower()).strip("-")
 
@@ -48,11 +124,10 @@ def main():
     t_start = time.time()
     deadline = t_start + a.budget_min * 60
 
-    briefs = [f for f in a.files if not f.endswith(".json")]
-    apis = [f for f in a.files if f.endswith(".json")]
+    briefs, apis = classify(a.files)
     if not briefs or len(apis) != 1:
-        sys.exit("give one or more brief .md files and exactly one tool API .json")
-    slot = a.slot or ("team-" + "-".join(slug(b) for b in briefs))   # own prefix: never the kit example's slot
+        sys.exit("give the brief (one or more text files, or a folder of them) and exactly one tool API file")
+    slot = a.slot or ("team-" + "-".join(slug(b) for b in briefs))[:60]   # own prefix: never the kit example's slot
     out_dir = ROOT / "out" / slot
     out_dir.mkdir(parents=True, exist_ok=True)
     trace = Trace(ROOT / "traces" / f"{slot}-{time.strftime('%Y%m%d-%H%M%S')}.log")
@@ -91,6 +166,8 @@ def main():
         return wf
 
     wf = build_and_check(spec, "v1")
+    trace.section("2b SELF-CHECK: code steps run locally on made-up customers")
+    self_check(spec, openapi, wf, trace)
     if a.no_freya:
         trace.end("offline-ok"); return
 
