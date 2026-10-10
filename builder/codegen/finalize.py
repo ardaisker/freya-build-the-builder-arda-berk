@@ -50,6 +50,12 @@ try:
             outcome, reason = _promise_outcome()
     if not outcome:
         notes = [x for x in str(getv('notes_log', '')).split(';') if x]
+        try:
+            single = int(float(getv('product_count', '0') or 0)) <= 1
+        except Exception:
+            single = False
+        if notes and single and (str(getv('hardship_flag', '')) == 'hardship' or str(getv('paid_flag', '')) == 'paid' or str(getv('dispute_flag', '')) == 'dispute'):
+            notes = []      # one product: the flags decide, a stray note does not
         if notes:
             reasons = [n.split(':', 1)[1] if ':' in n else n for n in notes]
             paid_case = _case('already_paid')
