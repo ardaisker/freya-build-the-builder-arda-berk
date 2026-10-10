@@ -69,9 +69,15 @@ def resolve_weekday(today, wd, qualifier):
         d = d + datetime.timedelta(days=1)
     return d
 
+def after_correction(s):
+    """'the 21st, sorry, I mean the 20th' -> 'the 20th': keep what follows the last correction marker."""
+    s = str(s or '')
+    parts = re.split(r'\b(?:sorry|i mean|i meant|no wait|wait|actually|correction|rather|not that)\b[,:]?', s.lower())
+    return parts[-1].strip() if len(parts) > 1 and parts[-1].strip() else s
+
 def parse_day_text(text, today):
     """Returns (date or None, status) with status in ok | vague | unknown."""
-    s = str(text or '').lower().strip()
+    s = after_correction(str(text or '')).lower().strip()
     s = re.sub(r'[,.!?]', ' ', s)
     s = re.sub(r'\s+', ' ', s).strip()
     if not s or s == '-':
@@ -192,7 +198,7 @@ def parse_day_text(text, today):
 
 def parse_time_text(text):
     """'11:00', '11 am', 'around eleven', 'half past five', 'eleven thirty', 'noon' -> 'HH:MM' or ''."""
-    s = str(text or '').lower().strip().replace('.', ':')
+    s = after_correction(str(text or '')).lower().strip().replace('.', ':')
     if not s or s == '-':
         return ''
     if re.search(r'\bnoon\b|\bmidday\b', s):

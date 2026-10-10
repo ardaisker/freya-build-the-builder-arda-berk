@@ -90,6 +90,9 @@ def test_resolve_this_friday_and_words():
     v["customer_date_text"] = "the twenty-second of October"
     run("resolve_date", v)
     assert v["resolved_date"] == "2026-10-22"
+    v["customer_date_text"] = "the 21st, sorry, I mean the 22nd"
+    run("resolve_date", v)
+    assert v["resolved_date"] == "2026-10-22"
     for text in ("six hundred and thirty-seven dollars and fifty cents on Friday the sixteenth of October twenty twenty-six", "Friday the sixteenth of October twenty twenty-six", "October sixteenth", "the sixteenth of October 2026", "on the 16th of October", "I can pay it on Friday"):
         v["customer_date_text"] = text
         run("resolve_date", v)
@@ -112,6 +115,9 @@ def test_tp_callback_window():
     v = {"now": NOW, "callback_day_text": "today", "callback_time_text": "10:30"}
     run("tp_resolve", v)
     assert v["tp_status"] == "retry"  # not later than now
+    v = {"now": NOW, "callback_day_text": "tomorrow", "callback_time_text": "eleven ten, sorry, I mean eleven"}
+    run("tp_resolve", v)
+    assert v["tp_status"] == "ok" and v["callback_time"] == "11:00"
 
 
 def test_finalize():

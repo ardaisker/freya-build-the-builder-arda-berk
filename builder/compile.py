@@ -570,6 +570,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
                 tr("finalize", "the customer was transferred", {"logic": "or", "conditions": [{"variable": "transfer_to_agent_success_count", "operator": "greater_than", "operand": 0}]}),
                 {"target_node": "finalize", "description": "The call is complete: the goodbye was said after a recorded promise, a refusal, a paid or disputed debt, a hardship case, or a transfer.", "is_tool_call": True,
                  "condition": {"operator": "matches_intent", "description": "The agent has finished the call and said goodbye"}},
+                tr("finalize", "the customer said goodbye", {"operator": "matches_intent", "description": "The customer says goodbye or bye to end the call (for example 'Thank you, goodbye'), not merely thanks or an acknowledgement"}),
             ],
         }
         nodes["resolve_date" + suffix] = code_node("resolve_date" + suffix, snippet("resolve_date", libs=LIBS, SPEC=spec), name)
