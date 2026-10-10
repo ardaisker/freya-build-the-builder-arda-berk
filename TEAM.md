@@ -6,7 +6,7 @@ Durum ve sahipler burada. Her commit'te güncellenir. Sunucuda: `cd /root/hackat
 - Boru hattı canlı: Freya anahtarı çalışıyor, kit base-agent 0/10, kit örnek builder (Opus) ~8-9/10 (slot `brief-a`).
 - Bizim derleyici builder: `python3 builder/build.py briefs/brief-a.md tools/openapi.json --cases public-test-set.json --brief A`
   Yol: brief → spec.json (Opus) → compile (sabit topoloji, kod düğümleri) → lint → dry-run → save → smoke → test → patch → export.
-  Brief A pratik seti: v1 9/10, v4 9/10, **v5 10/10** (15:20). Brief B (A+B spec): v2 2/3; v3 ölçülüyor. Agent id'ler `out/compiled/*.ids.json`.
+  Brief A pratik seti: v5 10/10 tek koşu, 2-tekrarda 7/10 (ikisinde de geçen); v7 2-tekrar ölçülüyor (1. tur 10/10). Brief B (A+B spec): **v6 3/3**. Tam build.py provası: sıfırdan 10/10, 186 s. Agent id'ler `out/compiled/*.ids.json`.
 - Kod düğümleri birim testli: `pytest tests/` (takvim, deadline, tarih sözcükleri, geri arama penceresi, outcome seçimi).
 
 ## Sahipler
