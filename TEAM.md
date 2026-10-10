@@ -1,0 +1,26 @@
+# Takım notu (Arda + Berk) · Build the Builder
+
+Durum ve sahipler burada. Her commit'te güncellenir. Sunucuda: `cd /root/hackathon/build-the-builder && git pull`.
+
+## Durum (Cmt 10 Eki, 15:50)
+- Boru hattı canlı: Freya anahtarı çalışıyor, kit base-agent 0/10, kit örnek builder (Opus) ~8-9/10 (slot `brief-a`).
+- Bizim derleyici builder: `python3 builder/build.py briefs/brief-a.md tools/openapi.json --cases public-test-set.json --brief A`
+  Yol: brief → spec.json (Opus) → compile (sabit topoloji, kod düğümleri) → lint → dry-run → save → smoke → test → patch → export.
+  İlk sürüm Brief A pratik setinde **9/10** (yalnız PUB-05 hardship düştü; düzeltildi, yeniden ölçülüyor).
+- Kod düğümleri birim testli: `pytest tests/` (takvim, deadline, tarih sözcükleri, geri arama penceresi, outcome seçimi).
+
+## Sahipler
+- Arda: builder kodu (`builder/`), final koşular (Mac, Claude Max login).
+- Berk (sunucu): ölçüm koşuları ve hata analizi. LLM gerekmez; `env.sh` yeter.
+  1. `source env.sh && python3 tools/run_cases.py <agent_id> --brief A --reps 2 --out results/<ad>.json` (tmux içinde)
+  2. Stiller: `--style pieces|corrects|talkative|asks_back|in_words`
+  3. Başarısız çağrı: `python3 -c "import freya,json; print(json.dumps(freya.get_call('<call_id>')['messages'],indent=1))"`
+     (call_id `results/<ad>.json` içinde). Hangi düğümde, hangi kural, hangi tur → kısa bug listesi.
+  4. Sentetik fixture brief'leri: `fixtures/` altına ham-malzeme biçimli bir brief + farklı takvim/kimlik soruları + değişik openapi enum'ları.
+- Agent id'ler: `.freya-agents.json` (gitignored) ve `out/<slot>/ids.json`.
+
+## Kurallar
+- Tek workspace: aynı anda tek simülasyon; `run_cases.py` bekler. Uzun koşular tmux'ta.
+- Anahtarlar `env.sh`'de, asla commit edilmez, asla yazdırılmaz.
+- Gizli brief'lerden (Paz 20:00) koda/prompt'a hiçbir kural, değer, isim girmez.
+- Workflow limiti: slot ile yerinde güncelleme (`save_workflow(slot)`); yeni slot açma.
