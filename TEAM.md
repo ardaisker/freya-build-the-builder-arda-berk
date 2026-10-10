@@ -11,7 +11,7 @@ Durum ve sahipler burada. Her commit'te güncellenir. Sunucuda: `cd /root/hackat
 
 ## Uç durum seti (Cmt akşam)
 - `fixtures/edge-cases.json`: 37 senaryo, 13 müşteri üzerinde (mock özel müşteri kabul etmiyor). Koşturma: `python3 builder/run_custom.py <agent_id> [--only E01,E02] [--reps 2] [--style ...]`.
-- Sonuçlar: A v20 20/27 → A v21 25/27 → A+B v21 27/27 → **A v23 37/37 iki tekrarda**; 2. parti A+B v22 10/10; 3. parti (E38-E42) A+B v22 4/5 → deneme sayma kuralı netleştirildi, A v24 / A+B v23 ölçülüyor. Regresyon kapısı A v23: 10/10 × 2.
+- Sonuçlar: A v20 20/27 → A v21 25/27 → A+B v21 27/27 → **A v23 37/37 iki tekrarda**; 2. parti A+B v22 10/10; 3. parti (E38-E42) A v24 5/5 + 4/5 (E39 judge varyansı); in_words stiliyle 42 vaka A v24 39/42 → saat sözcüğü, kısmi cevap, not tamlığı düzeltildi → yeniden ölçümde 3/3 × 2. Regresyon kapısı A v24 10/10 × 2, v25 9+10 (PUB-06 taban iki kez → 'bir kez teklif' kuralı, v26).
 
 ## Sahipler
 - Arda: builder kodu (`builder/`), final koşular (Mac, Claude Max login).
