@@ -60,6 +60,7 @@ def test_resolve_after_deadline():
     v["customer_date_text"] = "6 November"
     run("resolve_date", v)
     assert v["date_status"] == "after_deadline" and "Friday 23 October 2026" in v["date_verdict"]
+    assert "ATTEMPT 1 = 1250.00 on Friday 16 October 2026" in v["date_verdict"] and "ATTEMPT 2 = the floor 400.00 on Friday 23 October 2026" in v["date_verdict"]
 
 
 def test_resolve_two_products_one_after_deadline():

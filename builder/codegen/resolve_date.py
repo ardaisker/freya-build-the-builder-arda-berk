@@ -45,7 +45,14 @@ try:
                 verdict += ' Inside the deadline for ' + ', '.join([f['label'] + ' (' + f['product_id'] + ')' for f in ok]) + ': accept it for those. AFTER the deadline for ' + ', '.join([f['label'] + ' (' + f['product_id'] + ')' + ' whose latest date is ' + fmt(datetime.date.fromisoformat(f['deadline'])) for f in late]) + ': record that product on its own latest date and say so in the read-back.'
                 status = 'partly_after_deadline'
             elif late:
-                verdict += ' It is AFTER the latest allowed date. Say the latest date you can record is ' + ', '.join([fmt(datetime.date.fromisoformat(f['deadline'])) + ' for ' + f['label'] for f in late]) + ' and offer that date. If the customer refuses it, treat it as a refusal.'
+                verdict += ' It is AFTER the latest allowed date. Say the latest date you can record is ' + ', '.join([fmt(datetime.date.fromisoformat(f['deadline'])) + ' for ' + f['label'] for f in late]) + ' and offer that date (this offer is not a persuasion attempt).'
+                f0 = late[0]
+                a1 = fmt(datetime.date.fromisoformat(f0['attempt1_date']))
+                verdict += ' If the customer refuses that latest date, it is a refusal: then make ATTEMPT 1 = ' + money(f0['past_due']) + ' on ' + a1 + '.'
+                if int(f0.get('attempts') or 1) >= 2:
+                    verdict += ' Only if attempt 1 is refused too, make ATTEMPT 2 = the floor ' + money(f0['floor']) + ' on ' + fmt(datetime.date.fromisoformat(f0['deadline'])) + '. After that, stop.'
+                else:
+                    verdict += ' If attempt 1 is refused, stop (no attempt 2 for this product).'
                 status = 'after_deadline'
             else:
                 status = 'ok'
