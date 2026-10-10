@@ -3,7 +3,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "builder"))
 from codegen import snippet
 
-SPEC = json.load(open(ROOT / "out" / "brief-a.spec.json")) if (ROOT / "out" / "brief-a.spec.json").exists() else json.load(open(ROOT / "fixtures" / "brief-a.spec.json"))
+SPEC = json.load(open(ROOT / "fixtures" / "brief-a.spec.json"))
 NOW = "2026-10-14T11:00"
 
 
