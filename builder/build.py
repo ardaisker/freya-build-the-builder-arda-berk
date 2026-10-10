@@ -172,6 +172,8 @@ def main():
         trace.end("offline-ok"); return
 
     import freya  # noqa: E402  (needs FREYA_API_KEY)
+    import resilient
+    resilient.install(log=trace.log)
     trace.section("3 VALIDATE + SAVE on Freya")
     r = freya.validate_workflow(slot, wf)
     trace.log(f"dry-run: {r}")

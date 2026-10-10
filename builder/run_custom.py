@@ -23,6 +23,8 @@ def http(path, body=None, tries=4):
 
 
 def main():
+    import resilient
+    resilient.install()
     ap = argparse.ArgumentParser(); ap.add_argument("agent_id"); ap.add_argument("--cases", default=str(ROOT / "fixtures" / "edge-cases.json")); ap.add_argument("--only"); ap.add_argument("--reps", type=int, default=1); ap.add_argument("--style", choices=sorted(STYLES)); ap.add_argument("--out")
     a = ap.parse_args()
     cases = [c for c in json.load(open(a.cases)) if not a.only or c["id"] in a.only.split(",")]
