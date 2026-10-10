@@ -317,7 +317,7 @@ def negotiate_prompt(spec, tools):
         if name == "hardship":
             if re.search(r"no (persuasion|reminder|attempt|pressure)|without (persua|press)|not (try to )?persuade", str(c.get("behaviour") or ""), re.I):
                 txt += " This rule comes first: make NO persuasion attempt, propose NO date and NO amount yourself, offer NO other team and NO plan."
-            txt += " Make the offer this rule names exactly ONCE in the whole call; if the customer declines it, asks for something else instead, or does not answer, never mention it again. If they decline, say you understand, thank them, say goodbye and call transition_to_finalize."
+            txt += " Make the offer this rule names exactly ONCE in the whole call; if the customer declines it, asks for something else instead, or does not answer, never mention it again. If they decline, say only that you understand and wait for their reply (no goodbye yet). In your NEXT message: if the customer themselves named a day or an amount, handle it under the date and amount rules and record it; otherwise thank them, say goodbye and call transition_to_finalize."
         if name == "already_paid":
             txt += " Take no promise. Then thank them, say goodbye and call transition_to_finalize."
         if name == "dispute":
