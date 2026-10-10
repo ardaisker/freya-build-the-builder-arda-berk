@@ -1,6 +1,6 @@
 # ---- compute_facts: runs once after get_account. Writes `facts` (text for the prompts) and `pf_json`. ----
 try:
-    today, now_time = parse_now(getv('now'))
+    today, now_time = parse_now(now_value())
     pf = product_facts(today)
     lines = []
     lines.append('TODAY is ' + fmt(today) + ', time ' + now_time + '. Use only this date. Never the real clock.')

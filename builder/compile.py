@@ -11,6 +11,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from codegen import snippet  # noqa: E402
+import apimap  # noqa: E402
 
 STANCES = ["pay_today", "names_date", "names_amount", "too_much", "refuses", "already_paid", "dispute", "hardship", "restructuring", "wants_human", "question", "confirms", "other"]
 LIBS = ("calendar_lib", "dateparse_lib")
@@ -122,6 +123,16 @@ def api_node(name, tool, nxt, mapping=None, fail_target=None):
     return node
 
 
+def first_set(*cands):
+    """The first candidate that names an outcome. Candidates are {outcome, reason} dicts or (outcome, reason) pairs."""
+    for c in cands:
+        if isinstance(c, (tuple, list)) and c and c[0]:
+            return (str(c[0]), str(c[1] if len(c) > 1 else ""))
+        if isinstance(c, dict) and c.get("outcome"):
+            return (str(c["outcome"]), str(c.get("reason") or ""))
+    return ("", "")
+
+
 def oc(d, default=("", "")):
     if not isinstance(d, dict):
         return default
@@ -210,8 +221,8 @@ def identity_prompt(spec):
 MP_DEFAULTS = {
     "order": "If the customer cannot pay all products today, go through the products one by one, in the order of the facts.",
     "one_date_after_a_deadline": "If the customer names one date for everything and it is after one product's deadline, record that product on its own deadline and say so in the read-back; the other products keep the named date.",
-    "promise_failed_twice": "If create_promise fails twice for one product, keep the promises that were recorded and call add_note with reason service_error for that product.",
-    "closing": "promise if at least one promise was recorded; paid if every product is noted paid; otherwise no_promise with the reason of the first product whose note is not paid.",
+    "promise_failed_twice": "If create_promise fails twice for one product, keep the promises that were recorded and call add_note for that product with the reason the rules give for a failed service.",
+    "closing": "the system picks the closing outcome from the recorded promises and notes.",
 }
 
 
@@ -230,7 +241,8 @@ def mp_settings(spec, tools):
             mp[k] = True
     if not mp.get("note_reasons"):
         t = tools.get("add_note") or {}
-        mp["note_reasons"] = ((t.get("properties") or {}).get("reason") or {}).get("enum") or []
+        rn = ((((spec.get("api") or {}).get("tools") or {}).get("add_note") or {}).get("reason")) or "reason"
+        mp["note_reasons"] = ((t.get("properties") or {}).get(rn) or {}).get("enum") or []
     return mp
 
 
@@ -277,7 +289,7 @@ def negotiate_prompt(spec, tools):
         n += 1
     lines += [
         f"{n}. CONFIRM AND RECORD: " + " ".join(x for x in [cr.get("readback"), ("Call create_promise only after a clear yes." if cr.get("record_only_after_clear_yes", True) else ""), cr.get("changed_at_readback"), ("One promise per product." if cr.get("one_promise_per_product", True) else ""), cr.get("cannot_change_recorded")] if x) +
-        " Use the product_id from the facts (for example the id written after PRODUCT). Send the date as YYYY-MM-DD and the amount as a number.",
+        " Use the product id from the facts (the id written right after the word PRODUCT), copied exactly. Send the date as YYYY-MM-DD and the amount as a number.",
         f"{n}b. If the customer asks to change or cancel a promise that is already recorded: " + (cr.get("cannot_change_recorded") or "say a recorded promise cannot be changed in this call") + " Never call create_promise again for it.",
         f"{n + 1}. After create_promise, read the what_to_do_next line of the tool result and do exactly that. Say that the promise is recorded ONLY when the result says ok. " + (f"If the result says the promise was not saved, call create_promise once more with the same values without commenting; if it fails again, {cr.get('failure_say') or 'say you could not record it'}." if cr.get("retry_on_failure", 1) else (cr.get("failure_say") or "say you could not record it.")) +
         (" After a recorded promise say exactly: \"" + cr["recorded_say"] + "\"" if cr.get("recorded_say") else ""),
@@ -294,12 +306,64 @@ def negotiate_prompt(spec, tools):
     return "\n".join(lines)
 
 
+VERIFY_HOOK = """try:
+    if isinstance(result, dict):
+        result.pop('header', None)
+        d = result.get('data')
+        if isinstance(d, dict):
+            hints = @@HINTS@@
+            yes = (True, 'true', 'True')
+            hint = str(d.get('@@HINT@@') or '')
+            ver = d.get('@@VERIFIED@@')
+            allv = d.get('@@ALL@@')
+            if hint and hint in hints:
+                d['what_to_do_next'] = hints[hint] + ' Then call verify_identity again with the corrected answer.'
+            elif d.get('@@OK@@') is False or (d.get('@@ERR@@') and ver is None):
+                d['what_to_do_next'] = 'The answer could not be read (' + str(d.get('@@ERR@@') or 'format') + '). It does not count as wrong. Ask the same question again and send the answer as @@FMT@@.'
+            elif allv in yes or (ver in yes and @@IS_LAST@@):
+                d['what_to_do_next'] = 'All security questions passed. Say only: @@VSAY@@'
+                vars['id_state'] = 'verified'
+                vars['id_q_done'] = '@@FIELD@@'
+            elif ver in yes:
+                d['what_to_do_next'] = 'Correct answer. Reply with exactly: Thank you.'
+                vars['id_q_done'] = '@@FIELD@@'
+            else:
+                try:
+                    wn = int(float(vars.get('id_wrong_n') or 0)) + 1
+                except Exception:
+                    wn = 1
+                vars['id_wrong_n'] = str(wn)
+                left = d.get('@@LEFT@@')
+                try:
+                    left = int(left)
+                except Exception:
+                    left = @@MAXWRONG@@ - wn
+                if left <= 0:
+                    d['what_to_do_next'] = 'Wrong answer and no attempts left. The identity check has failed. Say nothing about any account. The call ends now.'
+                    vars['id_state'] = 'failed'
+                else:
+                    d['what_to_do_next'] = 'That answer is not correct. ' + str(left) + ' wrong answer(s) left before the check fails. Ask the same question once more, then call verify_identity again.'
+except Exception:
+    pass
+"""
+
+
 # ---------- compile ----------
 def compile_workflow(spec: dict, openapi: dict) -> dict:
     T = api_tools(openapi)
     for need in ("verify_identity", "get_account", "create_promise", "close_call"):
         if need not in T:
             raise ValueError(f"tool API has no {need}")
+    # every field name and enum value below comes from the tool API file, through the API map
+    A = apimap.resolve(spec, openapi)
+    spec = dict(spec, api=A)
+    AT = A["tools"]
+    V, GA, P, N, CB, TQ, CC = (AT.get(k) or {} for k in ("verify_identity", "get_account", "create_promise", "add_note", "schedule_callback", "transfer_to_agent", "close_call"))
+    OK, ERR = A["ok"], A["error"]
+    CUST_VAR = "{{" + A["call_vars"]["customer_id"] + "}}"
+
+    def cust(tool):
+        return {(AT.get(tool) or {}).get("customer", "customer_id"): CUST_VAR}
     o = spec.get("opening") or {}
     tp = spec.get("third_party") or {}
     idn = spec.get("identity") or {}
@@ -342,7 +406,10 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
              "condition": {"operator": "matches_intent", "description": "still unclear who is on the line after two asks"}},
         ],
     }
-    uo = oc(o.get("unclear_outcome"), ("not_reached", "unclear"))
+    # every closing outcome comes from the spec; where the brief is silent, the nearest rule of the same family is used
+    exh_o = first_set((spec.get("persuasion") or {}).get("exhausted_outcome"), (A["outcomes"][-1] if A["outcomes"] else "", ""))
+    cb_spec = tp.get("callback") or {}
+    uo = first_set(o.get("unclear_outcome"), cb_spec.get("fail_outcome"), tp.get("wrong_number"), cb_spec.get("ok_outcome"), exh_o)
     nodes["set_unclear"] = set_node("set_unclear", uo[0], uo[1], "end_unclear")
     nodes["end_unclear"] = end_node("end_unclear", "I could not confirm who I am speaking with, so I will end the call here. Thank you, goodbye.")
 
@@ -376,13 +443,13 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         tr("third_party", "ask once for another time", cond_eq("tp_status", "retry")),
     ])
     if "schedule_callback" in T:
-        nodes["do_callback"] = api_node("do_callback", tool_json(T["schedule_callback"], {"customer_id": "{{customer_id}}", "date": "{{callback_date}}", "time": "{{callback_time}}"}, "Book the callback."), "set_callback_ok", fail_target="set_no_callback")
+        nodes["do_callback"] = api_node("do_callback", tool_json(T["schedule_callback"], {**cust("schedule_callback"), CB.get("date", "date"): "{{callback_date}}", CB.get("time", "time"): "{{callback_time}}"}, "Book the callback."), "set_callback_ok", fail_target="set_no_callback")
     else:
         nodes["do_callback"] = code_node("do_callback", "vars['noop'] = '1'\n", "set_callback_ok")
-    ok_o = oc(cbw.get("ok_outcome"), ("not_reached", "callback"))
-    no_o = oc(cbw.get("fail_outcome"), ("not_reached", "no_callback"))
-    wn_o = oc(tp.get("wrong_number"), ("not_reached", "wrong_number"))
-    dc_o = oc((tp.get("deceased") or {}).get("outcome"), ("not_reached", "deceased"))
+    no_o = first_set(cbw.get("fail_outcome"), uo)
+    ok_o = first_set(cbw.get("ok_outcome"), no_o)
+    wn_o = first_set(tp.get("wrong_number"), no_o)
+    dc_o = first_set((tp.get("deceased") or {}).get("outcome"), wn_o)
     nodes["set_callback_ok"] = set_node("set_callback_ok", ok_o[0], ok_o[1], "end_callback")
     nodes["end_callback"] = end_node("end_callback", "Thank you. We will call back on {{callback_say}}. Goodbye.")
     nodes["set_no_callback"] = set_node("set_no_callback", no_o[0], no_o[1], "end_no_callback")
@@ -400,46 +467,20 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
     decline_rule = ("If the customer does not want to answer or asks what the call is about instead of answering: say once, in these words, 'These questions protect your account.' then ask the question again. (" + (d.get("explain_once") or "explain once that the questions protect their account") + ")" +
                     (" Asking what the call is about instead of answering counts as declining." if d.get("asking_why_counts_as_decline") else "") +
                     " On the SECOND refusal, say that you cannot continue without the security check, say goodbye, and in the same message call transition_to_set_declined. Never call it on a first refusal and never when the customer gave an answer.")
-    fail_o = oc((idn.get("fail") or {}).get("outcome"), ("not_verified", "failed"))
-    decl_o = oc((idn.get("decline") or {}).get("outcome"), ("not_verified", "declined"))
+    fail_o = first_set((idn.get("fail") or {}).get("outcome"), (idn.get("decline") or {}).get("outcome"), exh_o)
+    decl_o = first_set((idn.get("decline") or {}).get("outcome"), fail_o)
     for i, q in enumerate(qs):
         name = f"identity_q{i + 1}"
         is_last = i + 1 >= len(qs)
         nxt = "get_account" if is_last else f"identity_q{i + 2}"
         next_ask = "" if is_last else (qs[i + 1].get("ask") or "")
-        post = (
-            "try:\n"
-            "    if isinstance(result, dict):\n"
-            "        result.pop('header', None)\n"
-            "        d = result.get('data')\n"
-            "        if isinstance(d, dict):\n"
-            "            hints = " + json.dumps(hint_actions) + "\n"
-            "            if d.get('hint') and str(d.get('hint')) in hints:\n"
-            "                d['what_to_do_next'] = hints[str(d.get('hint'))] + ' Then call verify_identity again with the corrected answer.'\n"
-            "            elif d.get('ok') is False or (d.get('error') and d.get('verified') is None):\n"
-            "                d['what_to_do_next'] = 'The answer could not be read (' + str(d.get('error') or 'format') + '). It does not count as wrong. Ask the same question again and send the answer as " + (q.get("answer_format") or "required").replace("'", "") + ".'\n"
-            "            elif d.get('all_verified') in (True, 'true', 'True'):\n"
-            "                d['what_to_do_next'] = 'Both security questions passed. Say only: " + verified_say + "'\n"
-            "                vars['id_state'] = 'verified'\n"
-            "                vars['id_q_done'] = '" + str(q.get("field")) + "'\n"
-            "            elif d.get('verified') in (True, 'true', 'True'):\n"
-            "                d['what_to_do_next'] = 'Correct answer. Reply with exactly: Thank you.'\n"
-            "                vars['id_q_done'] = '" + str(q.get("field")) + "'\n"
-            "            else:\n"
-            "                left = d.get('wrong_answers_left')\n"
-            "                try:\n"
-            "                    left = int(left)\n"
-            "                except Exception:\n"
-            "                    left = 1\n"
-            "                if left <= 0:\n"
-            "                    d['what_to_do_next'] = 'Wrong answer and no attempts left. The identity check has failed. Say nothing about any account. The call ends now.'\n"
-            "                    vars['id_state'] = 'failed'\n"
-            "                else:\n"
-            "                    d['what_to_do_next'] = 'That answer is not correct. ' + str(left) + ' wrong answer(s) left before the check fails. Ask the same question once more, then call verify_identity again.'\n"
-            "except Exception:\n"
-            "    pass\n"
-        )
-        tool = tool_json(T["verify_identity"], {"customer_id": "{{customer_id}}", "field": str(q.get("field"))},
+        post = VERIFY_HOOK
+        for k, v in (("@@HINTS@@", json.dumps(hint_actions)), ("@@HINT@@", V.get("hint") or "hint"), ("@@VERIFIED@@", V.get("verified") or "verified"),
+                     ("@@ALL@@", V.get("all_verified") or "__no_all_flag__"), ("@@LEFT@@", V.get("wrong_left") or "__no_left_field__"), ("@@OK@@", OK), ("@@ERR@@", ERR),
+                     ("@@FMT@@", (q.get("answer_format") or "required").replace("'", "")), ("@@VSAY@@", verified_say), ("@@FIELD@@", str(q.get("field"))),
+                     ("@@IS_LAST@@", "True" if is_last else "False"), ("@@MAXWRONG@@", str(int(idn.get("max_wrong_total") or 3)))):
+            post = post.replace(k, v)
+        tool = tool_json(T["verify_identity"], {**cust("verify_identity"), V.get("field", "field"): str(q.get("field"))},
                          f"Check the customer's answer to this security question. CALL it as soon as the customer gives the answer, with the answer sent as: {q.get('answer_format', '')}. {q.get('notes', '')} Then follow what_to_do_next in the result.".strip(),
                          hooks={"post_process_code": post, "pre_process_code": "try:\n    vars['call_outcome'] = '" + decl_o[0] + "'\n    vars['call_reason'] = '" + decl_o[1] + "'\nexcept Exception:\n    pass\n"})
         task = "\n".join(x for x in [
@@ -459,15 +500,11 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
             "extraction_schema": [], "tools": [tool],
             "transitions": [
                 tr("get_account", "all security answers verified", {"logic": "or", "conditions": [
-                    {"variable": "verify_identity_response.data.all_verified", "operator": "equals", "operand": "true"},
-                    {"variable": "verify_identity_response.data.all_verified", "operator": "equals", "operand": "True"},
-                    {"variable": "id_state", "operator": "equals", "operand": "verified"}]}),
+                    {"variable": "id_state", "operator": "equals", "operand": "verified"}] + ([
+                    {"variable": "verify_identity_response.data." + V["all_verified"], "operator": "equals", "operand": "true"},
+                    {"variable": "verify_identity_response.data." + V["all_verified"], "operator": "equals", "operand": "True"}] if V.get("all_verified") else [])}),
                 tr("set_failed", "too many wrong answers", {"logic": "or", "conditions": [
-                    {"variable": "id_state", "operator": "equals", "operand": "failed"},
-                    {"logic": "and", "conditions": [{"variable": "verify_identity_response.data.wrong_answers_left", "operator": "equals", "operand": "0"},
-                                                     {"variable": "verify_identity_response.data.verified", "operator": "equals", "operand": "false"}]},
-                    {"logic": "and", "conditions": [{"variable": "verify_identity_response.data.wrong_answers_left", "operator": "equals", "operand": "0"},
-                                                     {"variable": "verify_identity_response.data.verified", "operator": "equals", "operand": "False"}]}]}),
+                    {"variable": "id_state", "operator": "equals", "operand": "failed"}]}),
             ] + ([] if is_last else [tr(nxt, "this question passed", cond_eq("id_q_done", str(q.get("field"))))]) + [
                 {"target_node": "set_declined", "description": "ONLY when the customer has refused the security check for the SECOND time (refused to answer again, asked again what the call is about instead of answering, or said again that they do not want to talk).", "is_tool_call": True,
                  "condition": {"operator": "matches_intent", "description": "The customer declined the security check for the second time"}},
@@ -481,10 +518,10 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
     nodes["end_declined"] = end_node("end_declined", "I understand. Without the security check I cannot continue. Thank you, goodbye.")
 
     # account + facts
-    nodes["get_account"] = api_node("get_account", tool_json(T["get_account"], {"customer_id": "{{customer_id}}"}, "The customer's late products.", max_retries=2), "compute_facts",
-                                   mapping=[{"path": "data.products", "variable": "account_products"}], fail_target="set_service_error")
+    nodes["get_account"] = api_node("get_account", tool_json(T["get_account"], cust("get_account"), "The customer's late products.", max_retries=2), "compute_facts",
+                                   mapping=[{"path": "data." + GA.get("products", "products"), "variable": "account_products"}], fail_target="set_service_error")
     nodes["compute_facts"] = code_node("compute_facts", snippet("facts", libs=LIBS, SPEC=spec), "negotiate")
-    se_o = oc(cr.get("failure_outcome"), ("no_promise", "service_error"))
+    se_o = first_set(cr.get("failure_outcome"), exh_o)
     nodes["set_service_error"] = set_node("set_service_error", se_o[0], se_o[1], "end_service_error")
     nodes["end_service_error"] = end_node("end_service_error", "I am sorry, I cannot access the account right now. Please try again later. Thank you, goodbye.")
 
@@ -497,23 +534,23 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         "        d = result.get('data')\n"
         "        pid = ''\n"
         "        try:\n"
-        "            pid = str((config or dict()).get('body', dict()).get('product_id', ''))\n"
+        "            pid = str((config or dict()).get('body', dict()).get('" + P.get("product_id", "product_id") + "', ''))\n"
         "        except Exception:\n"
         "            pid = ''\n"
-        "        if isinstance(d, dict) and d.get('ok') in (True, 'true', 'True'):\n"
+        "        if isinstance(d, dict) and d.get('" + OK + "') in (True, 'true', 'True'):\n"
         "            vars['promises_log'] = str(vars.get('promises_log') or '') + pid + ';'\n"
-        "            vars['call_outcome'] = 'promise'\n"
+        "            vars['call_outcome'] = '" + A["promise_outcome"] + "'\n"
         "            vars['call_reason'] = ''\n"
         "            d['what_to_do_next'] = 'The promise is recorded. Tell the customer it is recorded" + (" and say exactly: " + recorded_say if recorded_say else "") + ". Then continue with the next product if any; otherwise stop and wait for the customer to reply (do not say goodbye yet). In your NEXT message, answer anything they ask, then thank them, say goodbye and call transition_to_finalize.'\n"
         "        else:\n"
         "            err = ''\n"
         "            if isinstance(d, dict):\n"
-        "                err = str(d.get('error') or '')\n"
+        "                err = str(d.get('" + ERR + "') or '')\n"
         "                if 'unknown product' not in err:\n"
-        "                    d['error'] = 'service error'\n"
+        "                    d['" + ERR + "'] = 'service error'\n"
         "            else:\n"
         "                err = str(result.get('message') or result.get('status') or 'service error')\n"
-        "                result['data'] = dict(ok=False, error='service error')\n"
+        "                result['data'] = dict([('" + OK + "', False), ('" + ERR + "', 'service error')])\n"
         "            result['message'] = 'service error'\n"
         "            n = 0\n"
         "            try:\n"
@@ -523,7 +560,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         "            vars['promise_fail_n'] = str(n)\n"
         "            if 'unknown product' in err:\n"
         "                d2 = result.setdefault('data', dict()) if isinstance(result.get('data'), dict) else None\n"
-        "                result['what_to_do_next'] = 'NOT recorded: unknown product_id. Use the exact product id from the facts (p1, p2, ...) and call create_promise again.'\n"
+        "                result['what_to_do_next'] = 'NOT recorded: unknown product id. Use the exact product id written after the word PRODUCT in the facts and call create_promise again.'\n"
         "            elif n < 2:\n"
         "                result['what_to_do_next'] = 'The promise was NOT saved (service error). Call create_promise again right now with exactly the same values. Say nothing to the customer about saving or recording in this turn.'\n"
         "            else:\n"
@@ -533,14 +570,14 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         "except Exception:\n"
         "    pass\n"
     )
-    promise_tool = tool_json(T["create_promise"], {"customer_id": "{{customer_id}}"},
+    promise_tool = tool_json(T["create_promise"], cust("create_promise"),
                              "Record one payment promise. CALL it only after the customer said a clear yes to the read-back of product, amount and date, once per product. Then follow what_to_do_next in the result.",
                              hooks={"post_process_code": post_promise}, max_retries=int(cr.get("retry_on_failure", 1) or 0))
     queue_outcomes = {}
     note_outcomes = {}
     for c in spec.get("special_cases") or []:
         if c.get("transfer_queue"):
-            o = oc(c.get("accept_outcome") or c.get("outcome"), ("transferred", c["transfer_queue"]))
+            o = oc(c.get("accept_outcome") or c.get("outcome"), (A["transfer_outcome"], c["transfer_queue"]))
             queue_outcomes[c["transfer_queue"]] = [o[0], o[1]]
         if c.get("note_reason"):
             o = oc(c.get("decline_outcome") or c.get("outcome"))
@@ -549,16 +586,16 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
     note_outcomes.setdefault("service_error", list(se_o))
     tools = [promise_tool]
     if "transfer_to_agent" in T:
-        tools.append(tool_json(T["transfer_to_agent"], {"customer_id": "{{customer_id}}"},
+        tools.append(tool_json(T["transfer_to_agent"], cust("transfer_to_agent"),
                                "Hand the call to a person. CALL it only in the cases the rules name (with the queue the rule names). After the result, say goodbye and call transition_to_finalize.",
-                               hooks={"pre_process_code": "try:\n    vars['transfer_queue'] = str((config or dict()).get('body', dict()).get('queue', ''))\nexcept Exception:\n    pass\n",
-                                      "post_process_code": "try:\n    if isinstance(result, dict):\n        result.pop('header', None)\n        d = result.get('data')\n        if isinstance(d, dict):\n            if d.get('ok') in (True, 'true', 'True'):\n                qm = " + json.dumps(queue_outcomes) + "\n                q = str(vars.get('transfer_queue') or '')\n                o = qm.get(q) or ['transferred', q]\n                vars['call_outcome'] = o[0]\n                vars['call_reason'] = o[1]\n                d['what_to_do_next'] = 'Transferred. Tell the customer a colleague will take over, say goodbye and call transition_to_finalize in the same message.'\n            else:\n                d['what_to_do_next'] = 'The transfer failed. Say so, apologise, and end the call politely with transition_to_finalize.'\nexcept Exception:\n    pass\n"}))
+                               hooks={"pre_process_code": "try:\n    vars['transfer_queue'] = str((config or dict()).get('body', dict()).get('" + TQ.get("queue", "queue") + "', ''))\nexcept Exception:\n    pass\n",
+                                      "post_process_code": "try:\n    if isinstance(result, dict):\n        result.pop('header', None)\n        d = result.get('data')\n        if isinstance(d, dict):\n            if d.get('" + OK + "') in (True, 'true', 'True'):\n                qm = " + json.dumps(queue_outcomes) + "\n                q = str(vars.get('transfer_queue') or '')\n                o = qm.get(q) or ['" + A["transfer_outcome"] + "', q]\n                vars['call_outcome'] = o[0]\n                vars['call_reason'] = o[1]\n                d['what_to_do_next'] = 'Transferred. Tell the customer a colleague will take over, say goodbye and call transition_to_finalize in the same message.'\n            else:\n                d['what_to_do_next'] = 'The transfer failed. Say so, apologise, and end the call politely with transition_to_finalize.'\nexcept Exception:\n    pass\n"}))
     if "add_note" in T and mp.get("enabled"):
-        tools.append(tool_json(T["add_note"], {"customer_id": "{{customer_id}}"},
+        tools.append(tool_json(T["add_note"], cust("add_note"),
                                "Record why one product ends without a promise. CALL it once per product without a promise, with the reason the rules name. Never after a transfer.",
-                               model_fields=["product_id", "reason"],
-                               hooks={"pre_process_code": "try:\n    b = (config or dict()).get('body', dict())\n    vars['notes_log'] = str(vars.get('notes_log') or '') + str(b.get('product_id', '')) + ':' + str(b.get('reason', '')) + ';'\n    if not str(vars.get('promises_log') or ''):\n        nm = " + json.dumps(note_outcomes) + "\n        o = nm.get(str(b.get('reason', '')))\n        if o:\n            vars['call_outcome'] = o[0]\n            vars['call_reason'] = o[1]\nexcept Exception:\n    pass\n",
-                                      "post_process_code": "try:\n    if isinstance(result, dict):\n        result.pop('header', None)\n        d = result.get('data')\n        if isinstance(d, dict):\n            if d.get('ok') in (True, 'true', 'True'):\n                d['what_to_do_next'] = 'Noted. Continue with the next product, or if all products are handled, thank the customer, say goodbye and call transition_to_finalize.'\n            else:\n                d['what_to_do_next'] = 'The note was NOT saved (' + str(d.get('error') or 'error') + '). Call add_note again with the product_id and one of the allowed reasons.'\nexcept Exception:\n    pass\n"}))
+                               model_fields=[N.get("product_id", "product_id"), N.get("reason", "reason")],
+                               hooks={"pre_process_code": "try:\n    b = (config or dict()).get('body', dict())\n    vars['notes_log'] = str(vars.get('notes_log') or '') + str(b.get('" + N.get("product_id", "product_id") + "', '')) + ':' + str(b.get('" + N.get("reason", "reason") + "', '')) + ';'\n    if not str(vars.get('promises_log') or ''):\n        nm = " + json.dumps(note_outcomes) + "\n        o = nm.get(str(b.get('" + N.get("reason", "reason") + "', '')))\n        if o:\n            vars['call_outcome'] = o[0]\n            vars['call_reason'] = o[1]\nexcept Exception:\n    pass\n",
+                                      "post_process_code": "try:\n    if isinstance(result, dict):\n        result.pop('header', None)\n        d = result.get('data')\n        if isinstance(d, dict):\n            if d.get('" + OK + "') in (True, 'true', 'True'):\n                d['what_to_do_next'] = 'Noted. Continue with the next product, or if all products are handled, thank the customer, say goodbye and call transition_to_finalize.'\n            else:\n                d['what_to_do_next'] = 'The note was NOT saved (' + str(d.get('" + ERR + "') or 'error') + '). Call add_note again with the product_id and one of the allowed reasons.'\nexcept Exception:\n    pass\n"}))
     def negotiate_set(suffix, with_notes):
         name = "negotiate" + suffix
         ntools = [t for t in tools if with_notes or t["function"]["name"] != "add_note"]
@@ -606,9 +643,9 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
     for row in cl.get("outcome_table") or []:
         if row.get("outcome") and not row.get("reason"):
             no_reason.add(row["outcome"])
-    close_tool = tool_json(T["close_call"], {"customer_id": "{{customer_id}}", "outcome": "{{call_outcome}}", "reason": "{{call_reason}}"}, "Record how the call ended.",
+    close_tool = tool_json(T["close_call"], {**cust("close_call"), CC.get("outcome", "outcome"): "{{call_outcome}}", CC.get("reason", "reason"): "{{call_reason}}"}, "Record how the call ended.",
                            lifecycle=["end_of_call"],
-                           hooks={"pre_process_code": "try:\n    b = config.get('body')\n    if isinstance(b, dict):\n        if not b.get('reason') or b.get('outcome') in " + json.dumps(sorted(no_reason)) + ":\n            b.pop('reason', None)\nexcept Exception:\n    pass\n"})
+                           hooks={"pre_process_code": "try:\n    b = config.get('body')\n    if isinstance(b, dict):\n        if not b.get('" + CC.get("reason", "reason") + "') or b.get('" + CC.get("outcome", "outcome") + "') in " + json.dumps(sorted(no_reason)) + ":\n            b.pop('" + CC.get("reason", "reason") + "', None)\nexcept Exception:\n    pass\n"})
 
     nodes["setup"] = code_node("setup", "vars['call_outcome'] = '" + uo[0] + "'\nvars['call_reason'] = '" + uo[1] + "'\nvars['customer_date_text'] = '-'\nvars['date_verdict'] = '-'\nvars['tp_verdict'] = '-'\n", "opening")
     wf = {
@@ -617,7 +654,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         "nodes": nodes,
         "global_nodes": {},
         "tools": [close_tool],
-        "test_variables": {"customer_id": "c_test", "first_name": "Test", "last_name": "Customer", "title": "Mr", "now": "2026-01-01T10:00"},
+        "test_variables": {A["call_vars"]["customer_id"]: "c_test", "first_name": "Test", "last_name": "Customer", "title": "Mr", A["call_vars"]["now"]: "2026-01-01T10:00"},
     }
     return wf
 

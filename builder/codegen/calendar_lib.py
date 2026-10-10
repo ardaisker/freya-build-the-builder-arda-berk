@@ -84,38 +84,60 @@ def getv(name, default=''):
         return default
     return v
 
+def _api(tool):
+    return ((SPEC.get('api') or dict()).get('tools') or dict()).get(tool) or dict()
+
+def now_value():
+    name = ((SPEC.get('api') or dict()).get('call_vars') or dict()).get('now') or 'now'
+    return getv(name)
+
+def _norm(p):
+    """One product with the names the rest of the code uses, whatever the API calls its fields."""
+    g = _api('get_account')
+    q = dict(p)
+    q['product_id'] = p.get(g.get('product_id') or 'product_id')
+    q['type'] = p.get(g.get('type') or 'type')
+    q['past_due'] = p.get(g.get('past_due') or 'past_due')
+    q['days_late'] = p.get(g.get('days_late') or 'days_late')
+    return q
+
 def products_from_vars():
-    """get_account products: a list, a JSON string, or flattened keys. Returns a list of dicts."""
-    cands = [getv('account_products'), getv('get_account_response.data.products'), getv('get_account_response.data')]
+    """get_account products: a list, a JSON string, or flattened keys. Returns a list of normalised dicts."""
+    g = _api('get_account')
+    key = g.get('products') or 'products'
+    found = None
+    cands = [getv('account_products'), getv('get_account_response.data.' + key), getv('get_account_response.data')]
     for c in cands:
-        if isinstance(c, dict) and isinstance(c.get('products'), list):
-            return c['products']
-        if isinstance(c, list):
-            return c
-        if isinstance(c, str) and c.strip().startswith('['):
+        if isinstance(c, dict) and isinstance(c.get(key), list):
+            found = c[key]
+        elif isinstance(c, list):
+            found = c
+        elif isinstance(c, str) and c.strip().startswith('['):
             try:
-                return json.loads(c)
+                found = json.loads(c)
             except Exception:
                 pass
-        if isinstance(c, str) and c.strip().startswith('\x7b'):
+        elif isinstance(c, str) and c.strip().startswith('\x7b'):
             try:
                 o = json.loads(c)
-                if isinstance(o.get('products'), list):
-                    return o['products']
+                if isinstance(o.get(key), list):
+                    found = o[key]
             except Exception:
                 pass
-    out = []
-    for i in range(10):
-        pre = 'get_account_response.data.products.' + str(i) + '.'
-        pid = vars.get(pre + 'product_id')
-        if pid is None:
+        if found:
             break
-        p = dict()
-        for k in ('product_id', 'type', 'card_last4', 'past_due', 'days_late', 'minimum_payment', 'instalment_amount'):
-            if vars.get(pre + k) is not None:
-                p[k] = vars.get(pre + k)
-        out.append(p)
-    return out
+    if not found:
+        found = []
+        for i in range(10):
+            pre = 'get_account_response.data.' + key + '.' + str(i) + '.'
+            p = dict()
+            for k in list(vars.keys()):
+                if str(k).startswith(pre) and vars.get(k) is not None:
+                    p[str(k)[len(pre):]] = getv(k)
+            if not p:
+                break
+            found.append(p)
+    return [_norm(p) for p in found if isinstance(p, dict)]
 
 def band_for(days_late):
     try:
@@ -136,9 +158,6 @@ def floor_of(p):
     field = fb.get(str(p.get('type')))
     if field and p.get(field) is not None:
         return p.get(field)
-    for k in ('minimum_payment', 'instalment_amount'):
-        if p.get(k) is not None:
-            return p.get(k)
     return p.get('past_due')
 
 def label_of(p):

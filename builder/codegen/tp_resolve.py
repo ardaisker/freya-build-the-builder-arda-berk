@@ -1,6 +1,6 @@
 # ---- tp_resolve: someone else answered and named a callback day/time. Validate against the callback window. ----
 try:
-    today, now_time = parse_now(getv('now'))
+    today, now_time = parse_now(now_value())
     cb = (SPEC.get('third_party') or dict()).get('callback') or dict()
     day_text = str(getv('callback_day_text', '')).strip()
     time_text = str(getv('callback_time_text', '')).strip()

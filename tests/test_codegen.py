@@ -155,6 +155,8 @@ def test_finalize():
     assert (v["call_outcome"], v["call_reason"]) == ("no_promise", "dispute")
     v = dict(base, stance="refuses"); run("finalize", v)
     assert (v["call_outcome"], v["call_reason"]) == ("no_promise", "refused")
+    v = dict(base, call_outcome="x", call_reason="y", promises_log="p1;"); run("finalize", v)
+    assert v["call_outcome"] == "promise"
     v = dict(base, create_promise_failure_count="2", create_promise_success_count="0", stance="names_date"); run("finalize", v)
     assert (v["call_outcome"], v["call_reason"]) == ("no_promise", "service_error")
     v = dict(base, notes_log="p1:paid;p2:paid;"); run("finalize", v)

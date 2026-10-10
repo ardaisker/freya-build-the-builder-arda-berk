@@ -7,46 +7,112 @@
     "first_sentence": "the EXACT words the agent speaks first, as spoken text in quotes-free form (for example: Hello, this is the digital assistant of X Bank. This call is recorded.). Never an instruction such as 'Say that...'.",
     "confirm_question": "the exact spoken question, using {{title}} {{last_name}} {{first_name}} placeholders (for example: Am I speaking with {{title}} {{last_name}}?)",
     "confirmation_rule": "what counts as confirmation and what does not; how many asks before closing as unclear",
-    "forbidden_before_verification": ["words/topics not to be said before identity is verified"],
+    "forbidden_before_verification": [
+      "words/topics not to be said before identity is verified"
+    ],
     "ai_question_answer": "what to say if asked whether it is a robot/AI",
     "scam_question_answer": "what to say if asked whether this is a scam",
-    "unclear_outcome": {"outcome": "enum", "reason": "enum or empty"}
+    "unclear_outcome": {
+      "outcome": "enum",
+      "reason": "enum or empty"
+    }
   },
   "third_party": {
     "rules": "what to say and not say when someone else answers",
     "callback": {
       "allowed_days": "today_or_next_business_day | today | next_business_day | any_business_day_within_N (describe)",
       "max_days_ahead": 1,
-      "from": "HH:MM", "to": "HH:MM", "must_be_after_now": true, "ask_again_once": true,
-      "ok_outcome": {"outcome": "enum", "reason": "enum"},
-      "fail_outcome": {"outcome": "enum", "reason": "enum"}
+      "from": "HH:MM",
+      "to": "HH:MM",
+      "must_be_after_now": true,
+      "ask_again_once": true,
+      "ok_outcome": {
+        "outcome": "enum",
+        "reason": "enum"
+      },
+      "fail_outcome": {
+        "outcome": "enum",
+        "reason": "enum"
+      }
     },
-    "wrong_number": {"outcome": "enum", "reason": "enum"},
-    "deceased": {"say": "exact sentence", "outcome": {"outcome": "enum", "reason": "enum"}},
+    "wrong_number": {
+      "outcome": "enum",
+      "reason": "enum"
+    },
+    "deceased": {
+      "say": "exact sentence",
+      "outcome": {
+        "outcome": "enum",
+        "reason": "enum"
+      }
+    },
     "relative_rule": "what a relative may not do/hear"
   },
   "identity": {
-    "questions": [{"field": "enum value of verify_identity.field", "ask": "what to ask for, in words", "answer_format": "how to send the answer to the tool", "notes": "parsing rules, e.g. numeric date = day, month, year"}],
+    "questions": [
+      {
+        "field": "enum value of verify_identity.field",
+        "ask": "what to ask for, in words",
+        "answer_format": "how to send the answer to the tool",
+        "notes": "parsing rules, e.g. numeric date = day, month, year"
+      }
+    ],
     "max_wrong_total": 3,
     "retry_allowed": true,
-    "hints": [{"hint": "enum value from the API", "action": "what to do; whether it counts as wrong"}],
-    "fail": {"say": "what to tell the customer", "outcome": {"outcome": "enum", "reason": "enum"}},
-    "decline": {"explain_once": "what to explain the first time they decline", "asking_why_counts_as_decline": true, "outcome": {"outcome": "enum", "reason": "enum"}},
+    "hints": [
+      {
+        "hint": "enum value from the API",
+        "action": "what to do; whether it counts as wrong"
+      }
+    ],
+    "fail": {
+      "say": "what to tell the customer",
+      "outcome": {
+        "outcome": "enum",
+        "reason": "enum"
+      }
+    },
+    "decline": {
+      "explain_once": "what to explain the first time they decline",
+      "asking_why_counts_as_decline": true,
+      "outcome": {
+        "outcome": "enum",
+        "reason": "enum"
+      }
+    },
     "verified_say": "the exact spoken sentence after all questions pass (spoken text only)"
   },
   "debt_statement": {
     "intro": "how to introduce the reason of the call after verification",
-    "product_wording": {"<product type enum>": "wording, may use {card_last4}"},
+    "product_wording": {
+      "<product type enum value>": "wording; may use {<item property name>} placeholders with the exact property names of the tool API, e.g. the card digits"
+    },
     "state": "which figures to state (amount, days late, ...)",
     "multi_product_rule": "how to state several products"
   },
   "calendar": {
-    "business_weekdays": ["Mon", "Tue", "Wed", "Thu", "Fri"],
-    "holidays": ["YYYY-MM-DD"],
+    "business_weekdays": [
+      "Mon",
+      "Tue",
+      "Wed",
+      "Thu",
+      "Fri"
+    ],
+    "holidays": [
+      "YYYY-MM-DD"
+    ],
     "next_weekday_means": "following calendar week | next occurrence",
     "this_weekday_means": "current week | next occurrence"
   },
-  "bands": [{"name": "string", "days_late_min": 1, "days_late_max": 7, "deadline_business_days_after_today": 12, "persuasion_attempts": 1}],
+  "bands": [
+    {
+      "name": "string",
+      "days_late_min": 1,
+      "days_late_max": 7,
+      "deadline_business_days_after_today": 12,
+      "persuasion_attempts": 1
+    }
+  ],
   "date_rules": {
     "promise_date": "constraints in words",
     "weekend_or_holiday": "what to do",
@@ -55,7 +121,9 @@
     "next_weekday": "meaning of 'next <weekday>' and 'this <weekday>'"
   },
   "amounts": {
-    "floor_by_type": {"<product type enum>": "<product field name holding the floor>"},
+    "floor_by_type": {
+      "<product type enum value>": "<exact item property name of the tool API that holds the floor for this type>"
+    },
     "ask_full_first": true,
     "never_ask_how_much": true,
     "too_much": "what to do when the full amount is too much",
@@ -68,20 +136,99 @@
     "what_counts_as_refusal": "words",
     "attempt_1": "what to propose on attempt 1",
     "attempt_2": "what to propose on attempt 2 (and which bands get it)",
-    "exhausted_outcome": {"outcome": "enum", "reason": "enum"},
+    "exhausted_outcome": {
+      "outcome": "enum",
+      "reason": "enum"
+    },
     "do_not_repeat_refused_offer": true
   },
   "special_cases": [
-    {"name": "hardship", "trigger": "words", "behaviour": "words", "transfer_queue": "enum or empty", "accept_outcome": {"outcome": "", "reason": ""}, "decline_outcome": {"outcome": "", "reason": ""}, "note_reason": "enum or empty"},
-    {"name": "already_paid", "trigger": "", "behaviour": "", "outcome": {"outcome": "", "reason": ""}, "note_reason": ""},
-    {"name": "dispute", "trigger": "", "behaviour": "", "outcome": {"outcome": "", "reason": ""}, "note_reason": ""},
-    {"name": "restructuring", "trigger": "", "behaviour": "", "transfer_queue": "", "outcome": {"outcome": "", "reason": ""}},
-    {"name": "human", "trigger": "", "behaviour": "", "transfer_queue": "", "outcome": {"outcome": "", "reason": ""}},
-    {"name": "refuses_to_talk", "trigger": "", "outcome_after_verification": {"outcome": "", "reason": ""}, "outcome_before_verification": {"outcome": "", "reason": ""}},
-    {"name": "unknown_question", "behaviour": ""},
-    {"name": "<any other case in the brief>", "trigger": "", "behaviour": "", "transfer_queue": "", "outcome": {"outcome": "", "reason": ""}, "note_reason": ""}
+    {
+      "name": "hardship",
+      "trigger": "words",
+      "behaviour": "words",
+      "transfer_queue": "enum or empty",
+      "accept_outcome": {
+        "outcome": "",
+        "reason": ""
+      },
+      "decline_outcome": {
+        "outcome": "",
+        "reason": ""
+      },
+      "note_reason": "enum or empty"
+    },
+    {
+      "name": "already_paid",
+      "trigger": "",
+      "behaviour": "",
+      "outcome": {
+        "outcome": "",
+        "reason": ""
+      },
+      "note_reason": ""
+    },
+    {
+      "name": "dispute",
+      "trigger": "",
+      "behaviour": "",
+      "outcome": {
+        "outcome": "",
+        "reason": ""
+      },
+      "note_reason": ""
+    },
+    {
+      "name": "restructuring",
+      "trigger": "",
+      "behaviour": "",
+      "transfer_queue": "",
+      "outcome": {
+        "outcome": "",
+        "reason": ""
+      }
+    },
+    {
+      "name": "human",
+      "trigger": "",
+      "behaviour": "",
+      "transfer_queue": "",
+      "outcome": {
+        "outcome": "",
+        "reason": ""
+      }
+    },
+    {
+      "name": "refuses_to_talk",
+      "trigger": "",
+      "outcome_after_verification": {
+        "outcome": "",
+        "reason": ""
+      },
+      "outcome_before_verification": {
+        "outcome": "",
+        "reason": ""
+      }
+    },
+    {
+      "name": "unknown_question",
+      "behaviour": ""
+    },
+    {
+      "name": "<any other case in the brief>",
+      "trigger": "",
+      "behaviour": "",
+      "transfer_queue": "",
+      "outcome": {
+        "outcome": "",
+        "reason": ""
+      },
+      "note_reason": ""
+    }
   ],
-  "forbidden_offers": ["things the agent must never offer"],
+  "forbidden_offers": [
+    "things the agent must never offer"
+  ],
   "confirm_record": {
     "readback": "how to read back and ask for confirmation",
     "record_only_after_clear_yes": true,
@@ -90,7 +237,10 @@
     "cannot_change_recorded": "what to say if they want to change a recorded promise",
     "retry_on_failure": 1,
     "failure_say": "what to say when recording failed for good",
-    "failure_outcome": {"outcome": "enum", "reason": "enum"},
+    "failure_outcome": {
+      "outcome": "enum",
+      "reason": "enum"
+    },
     "recorded_say": "the exact spoken sentence to say after a recorded promise (spoken text only)"
   },
   "multi_product": {
@@ -101,7 +251,9 @@
     "one_date_after_a_deadline": "words",
     "one_readback_one_confirmation": true,
     "note_products_without_promise": true,
-    "note_reasons": ["enum values of add_note.reason"],
+    "note_reasons": [
+      "enum values of add_note.reason"
+    ],
     "dispute_or_paid_does_not_end_call": true,
     "transfer_no_notes": true,
     "promise_failed_twice": "words",
@@ -112,7 +264,68 @@
     "farewell": "exact spoken farewell sentence (spoken text, not an instruction)",
     "after_promise_then_transfer": "words",
     "close_call_rule": "words (exactly one close_call, last tool call, etc.)",
-    "outcome_table": [{"outcome": "enum", "reason": "enum or empty", "when": "words"}]
+    "outcome_table": [
+      {
+        "outcome": "enum",
+        "reason": "enum or empty",
+        "when": "words"
+      }
+    ]
   },
-  "residual_rules": ["every rule of the brief that none of the fields above captures, verbatim or near-verbatim, one per entry"]
+  "residual_rules": [
+    "every rule of the brief that none of the fields above captures, verbatim or near-verbatim, one per entry"
+  ],
+  "api": {
+    "_doc": "EXACT property names and enum values copied from the tool API file (never invented). Used to wire the tools.",
+    "tools": {
+      "verify_identity": {
+        "customer": "body property holding the customer id",
+        "field": "body property that says which security question",
+        "answer": "body property with the answer",
+        "verified": "response property: this answer was right",
+        "all_verified": "response property: every question passed (or empty)",
+        "wrong_left": "response property: wrong answers left (or empty)",
+        "hint": "response property with a hint code (or empty)"
+      },
+      "get_account": {
+        "customer": "",
+        "products": "response property with the list of products",
+        "product_id": "item property: product id",
+        "type": "item property: product type",
+        "past_due": "item property: past-due amount",
+        "days_late": "item property: days late"
+      },
+      "create_promise": {
+        "customer": "",
+        "product_id": "",
+        "amount": "",
+        "date": ""
+      },
+      "add_note": {
+        "customer": "",
+        "product_id": "",
+        "reason": ""
+      },
+      "schedule_callback": {
+        "customer": "",
+        "date": "",
+        "time": ""
+      },
+      "transfer_to_agent": {
+        "customer": "",
+        "queue": ""
+      },
+      "close_call": {
+        "customer": "",
+        "outcome": "",
+        "reason": ""
+      }
+    },
+    "promise_outcome": "the close_call outcome value used when at least one promise was recorded",
+    "transfer_outcome": "the close_call outcome value used after a transfer",
+    "call_vars": {
+      "customer_id": "name of the call variable that holds the customer id",
+      "now": "name of the call variable with the current date and time"
+    }
+  }
 }

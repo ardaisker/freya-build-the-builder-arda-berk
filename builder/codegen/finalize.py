@@ -17,10 +17,7 @@ def _count(name):
         return 0
 
 def _promise_outcome():
-    for row in (SPEC.get('closing') or dict()).get('outcome_table') or []:
-        if str(row.get('outcome')) == 'promise':
-            return 'promise', ''
-    return 'promise', ''
+    return str((SPEC.get('api') or dict()).get('promise_outcome') or 'promise'), ''
 
 def _note_outcome(reason):
     r = str(reason)
@@ -37,14 +34,14 @@ try:
     vars['finalize_debug'] = 'hf=' + repr(vars.get('hardship_flag'))[:80] + ' pc=' + repr(vars.get('product_count'))[:20] + ' nl=' + repr(vars.get('notes_log'))[:40] + ' pf=' + repr(vars.get('paid_flag'))[:40]
     outcome = ''
     reason = ''
-    queue = str(getv('transfer_queue', '') or getv('transfer_to_agent_args.queue', '') or '')
+    queue = str(getv('transfer_queue', '') or getv('transfer_to_agent_args.' + str(_api('transfer_to_agent').get('queue') or 'queue'), '') or '')
     if _count('transfer_to_agent_success_count') > 0 and queue:
         for c in SPEC.get('special_cases') or []:
             if str(c.get('transfer_queue') or '') == queue:
                 outcome, reason = _oc(c.get('accept_outcome') or c.get('outcome'))
                 break
         if not outcome:
-            outcome, reason = 'transferred', queue
+            outcome, reason = str((SPEC.get('api') or dict()).get('transfer_outcome') or 'transferred'), queue
     if not outcome:
         promises = [x for x in str(getv('promises_log', '')).split(';') if x]
         if promises or _count('create_promise_success_count') > 0:
@@ -77,10 +74,8 @@ try:
             outcome, reason = _oc((SPEC.get('confirm_record') or dict()).get('failure_outcome'))
     if not outcome:
         outcome, reason = _oc((SPEC.get('persuasion') or dict()).get('exhausted_outcome'))
-    if not outcome:
-        outcome, reason = 'no_promise', 'refused'
-    vars['call_outcome'] = outcome
-    vars['call_reason'] = reason
+    if outcome:
+        vars['call_outcome'] = outcome
+        vars['call_reason'] = reason
 except Exception as e:
-    vars['call_outcome'] = 'no_promise'
-    vars['call_reason'] = 'refused'
+    pass

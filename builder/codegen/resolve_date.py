@@ -1,6 +1,6 @@
 # ---- resolve_date: the customer named a payment day. Turn it into a date and a verdict the agent can act on. ----
 try:
-    today, now_time = parse_now(getv('now'))
+    today, now_time = parse_now(now_value())
     text = str(getv('customer_date_text', '')).strip()
     try:
         pf = json.loads(getv('pf_json', '[]') or '[]')
