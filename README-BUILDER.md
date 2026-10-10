@@ -35,3 +35,15 @@ and its result). Unit tests for the code nodes: `pytest tests/`.
 
 Probe a workflow quickly (crash checks only, the chat route is not the scored engine):
 `python3 builder/probe.py <workflow_id> PUB-01 "Yes, speaking." "14 March 1988" "4471"`.
+
+## Final run (hidden briefs)
+
+```bash
+source env.sh
+python3 builder/build.py briefs/hidden-1.md briefs/hidden-1.openapi.json --slot hidden-1 2>&1 | tee traces/hidden-1.log
+python3 builder/build.py briefs/hidden-2.md briefs/hidden-2.openapi.json --slot hidden-2 2>&1 | tee traces/hidden-2.log
+```
+
+Without `--cases` the builder runs no practice simulation (there are none for a hidden brief): extract, compile, lint,
+dry-run, save, one smoke turn, export. `submission/<slot>.workflow.json` is the exported phone agent. Fill
+`submission/FORM-TEMPLATE.json`, commit, push, send.
