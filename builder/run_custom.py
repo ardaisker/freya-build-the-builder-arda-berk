@@ -7,8 +7,19 @@ import argparse, hashlib, json, pathlib, sys, time
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "tools"))
 import freya
-from score import http, score_ledger
+from score import http as _http, score_ledger
 from run_cases import persona_for, STYLES
+
+
+def http(path, body=None, tries=4):
+    """The mock bank occasionally answers with an HTML error page; retry a few times before giving up."""
+    for i in range(tries):
+        try:
+            return _http(path, body)
+        except Exception as e:
+            if i == tries - 1:
+                raise
+            print(f"mock bank error on {path} ({type(e).__name__}), retrying in 15 s", flush=True); time.sleep(15)
 
 
 def main():
