@@ -34,6 +34,7 @@ def _note_outcome(reason):
     return _oc((SPEC.get('persuasion') or dict()).get('exhausted_outcome'))
 
 try:
+    vars['finalize_debug'] = 'hf=' + repr(vars.get('hardship_flag'))[:80] + ' pc=' + repr(vars.get('product_count'))[:20] + ' nl=' + repr(vars.get('notes_log'))[:40] + ' pf=' + repr(vars.get('paid_flag'))[:40]
     outcome = ''
     reason = ''
     queue = str(getv('transfer_queue', '') or getv('transfer_to_agent_args.queue', '') or '')

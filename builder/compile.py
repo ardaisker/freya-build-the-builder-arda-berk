@@ -484,6 +484,8 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         "            pid = ''\n"
         "        if isinstance(d, dict) and d.get('ok') in (True, 'true', 'True'):\n"
         "            vars['promises_log'] = str(vars.get('promises_log') or '') + pid + ';'\n"
+        "            vars['outcome'] = 'promise'\n"
+        "            vars['reason'] = ''\n"
         "            d['what_to_do_next'] = 'The promise is recorded. Tell the customer it is recorded" + (" and say exactly: " + recorded_say if recorded_say else "") + ". Then continue with the next product if any, otherwise thank them, say goodbye and call transition_to_finalize in the same message.'\n"
         "        else:\n"
         "            err = ''\n"
@@ -514,17 +516,28 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
     promise_tool = tool_json(T["create_promise"], {"customer_id": "{{customer_id}}"},
                              "Record one payment promise. CALL it only after the customer said a clear yes to the read-back of product, amount and date, once per product. Then follow what_to_do_next in the result.",
                              hooks={"post_process_code": post_promise}, max_retries=int(cr.get("retry_on_failure", 1) or 0))
+    queue_outcomes = {}
+    note_outcomes = {}
+    for c in spec.get("special_cases") or []:
+        if c.get("transfer_queue"):
+            o = oc(c.get("accept_outcome") or c.get("outcome"), ("transferred", c["transfer_queue"]))
+            queue_outcomes[c["transfer_queue"]] = [o[0], o[1]]
+        if c.get("note_reason"):
+            o = oc(c.get("decline_outcome") or c.get("outcome"))
+            if o[0]:
+                note_outcomes[c["note_reason"]] = [o[0], o[1]]
+    note_outcomes.setdefault("service_error", list(se_o))
     tools = [promise_tool]
     if "transfer_to_agent" in T:
         tools.append(tool_json(T["transfer_to_agent"], {"customer_id": "{{customer_id}}"},
                                "Hand the call to a person. CALL it only in the cases the rules name (with the queue the rule names). After the result, say goodbye and call transition_to_finalize.",
                                hooks={"pre_process_code": "try:\n    vars['transfer_queue'] = str((config or dict()).get('body', dict()).get('queue', ''))\nexcept Exception:\n    pass\n",
-                                      "post_process_code": "try:\n    if isinstance(result, dict):\n        result.pop('header', None)\n        d = result.get('data')\n        if isinstance(d, dict):\n            d['what_to_do_next'] = 'Transferred. Tell the customer a colleague will take over, say goodbye and call transition_to_finalize in the same message.' if d.get('ok') in (True, 'true', 'True') else 'The transfer failed. Say so, apologise, and end the call politely with transition_to_finalize.'\nexcept Exception:\n    pass\n"}))
+                                      "post_process_code": "try:\n    if isinstance(result, dict):\n        result.pop('header', None)\n        d = result.get('data')\n        if isinstance(d, dict):\n            if d.get('ok') in (True, 'true', 'True'):\n                qm = " + json.dumps(queue_outcomes) + "\n                q = str(vars.get('transfer_queue') or '')\n                o = qm.get(q) or ['transferred', q]\n                vars['outcome'] = o[0]\n                vars['reason'] = o[1]\n                d['what_to_do_next'] = 'Transferred. Tell the customer a colleague will take over, say goodbye and call transition_to_finalize in the same message.'\n            else:\n                d['what_to_do_next'] = 'The transfer failed. Say so, apologise, and end the call politely with transition_to_finalize.'\nexcept Exception:\n    pass\n"}))
     if "add_note" in T and mp.get("enabled"):
         tools.append(tool_json(T["add_note"], {"customer_id": "{{customer_id}}"},
                                "Record why one product ends without a promise. CALL it once per product without a promise, with the reason the rules name. Never after a transfer.",
                                model_fields=["product_id", "reason"],
-                               hooks={"pre_process_code": "try:\n    b = (config or dict()).get('body', dict())\n    vars['notes_log'] = str(vars.get('notes_log') or '') + str(b.get('product_id', '')) + ':' + str(b.get('reason', '')) + ';'\nexcept Exception:\n    pass\n",
+                               hooks={"pre_process_code": "try:\n    b = (config or dict()).get('body', dict())\n    vars['notes_log'] = str(vars.get('notes_log') or '') + str(b.get('product_id', '')) + ':' + str(b.get('reason', '')) + ';'\n    if not str(vars.get('promises_log') or ''):\n        nm = " + json.dumps(note_outcomes) + "\n        o = nm.get(str(b.get('reason', '')))\n        if o:\n            vars['outcome'] = o[0]\n            vars['reason'] = o[1]\nexcept Exception:\n    pass\n",
                                       "post_process_code": "try:\n    if isinstance(result, dict):\n        result.pop('header', None)\n        d = result.get('data')\n        if isinstance(d, dict):\n            d['what_to_do_next'] = 'Noted. Continue with the next product, or if all products are handled, thank the customer, say goodbye and call transition_to_finalize.'\nexcept Exception:\n    pass\n"}))
     nodes["negotiate"] = {
         "name": "negotiate", "node_type": "conversation", "on_enter": {"type": "llm"},
@@ -548,6 +561,13 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         ],
     }
     nodes["resolve_date"] = code_node("resolve_date", snippet("resolve_date", libs=LIBS, SPEC=spec), "negotiate")
+    for flag, case_name, pick in (("hardship", "hardship", "decline_outcome"), ("paid", "already_paid", "outcome"), ("dispute", "dispute", "outcome")):
+        c = cases.get(case_name) or {}
+        o = oc(c.get(pick) or c.get("outcome"))
+        if not o[0]:
+            continue
+        nodes[f"mark_{flag}"] = code_node(f"mark_{flag}", "vars['" + flag + "_marked'] = '1'\nif not str(vars.get('promises_log') or ''):\n    vars['outcome'] = '" + o[0] + "'\n    vars['reason'] = '" + o[1] + "'\n", "negotiate")
+        nodes["negotiate"]["transitions"].insert(0, tr(f"mark_{flag}", f"the customer mentioned {flag}", cond_and({"variable": f"{flag}_flag", "operator": "equals", "operand": flag}, {"variable": f"{flag}_marked", "operator": "is_not_set"})))
     nodes["finalize"] = code_node("finalize", snippet("finalize", libs=LIBS, SPEC=spec), "end_main")
     nodes["end_main"] = end_node("end_main", None)
 
