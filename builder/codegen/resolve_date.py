@@ -10,6 +10,8 @@ try:
     verdict = ''
     resolved = ''
     if status == 'vague':
+        low = text.lower()
+        vars['vague_hint'] = 'next' if ('next week' in low or 'week after' in low or 'following week' in low) else ('this' if 'this week' in low else '')
         dls = sorted(set([f['deadline'] for f in pf]))
         prop = ', '.join([fmt(datetime.date.fromisoformat(x)) for x in dls]) if dls else 'the deadline'
         verdict = 'DATE CHECK: "' + text + '" is not an exact day. Ask once for the exact day. If the customer still gives none, propose the latest allowed date: ' + prop + '.'
@@ -50,6 +52,8 @@ try:
     vars['date_verdict'] = verdict
     vars['resolved_date'] = resolved
     vars['date_status'] = status
+    if resolved:
+        vars['vague_hint'] = ''
 except Exception as e:
     vars['date_verdict'] = 'DATE CHECK: could not check the day. Ask the customer for the exact day and compare it with the business days and deadline in the facts.'
     vars['resolved_date'] = ''

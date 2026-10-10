@@ -87,6 +87,15 @@ def test_resolve_this_friday_and_words():
     v["customer_date_text"] = "tomorrow"
     run("resolve_date", v)
     assert v["resolved_date"] == "2026-10-15"
+    v["customer_date_text"] = "next week"
+    run("resolve_date", v)
+    assert v["date_status"] == "vague" and v["vague_hint"] == "next"
+    v["customer_date_text"] = "Thursday"
+    run("resolve_date", v)
+    assert v["resolved_date"] == "2026-10-22" and v["vague_hint"] == ""
+    v["customer_date_text"] = "Thursday"
+    run("resolve_date", v)
+    assert v["resolved_date"] == "2026-10-15"
     v["customer_date_text"] = "the twenty-second of October"
     run("resolve_date", v)
     assert v["resolved_date"] == "2026-10-22"
