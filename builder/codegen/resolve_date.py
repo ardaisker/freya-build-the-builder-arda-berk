@@ -54,7 +54,7 @@ try:
                 verdict += ' Inside the deadline for ' + ', '.join([f['label'] + ' (' + f['product_id'] + ')' for f in ok]) + ': accept it for those. AFTER the deadline for ' + ', '.join([f['label'] + ' (' + f['product_id'] + ')' + ' whose latest date is ' + fmt(datetime.date.fromisoformat(f['deadline'])) for f in late]) + ': record that product on its own latest date and say so in the read-back.'
                 status = 'partly_after_deadline'
             elif late:
-                verdict += ' It is AFTER the latest allowed date. Say the latest date you can record is ' + ', '.join([fmt(datetime.date.fromisoformat(f['deadline'])) + ' for ' + f['label'] for f in late]) + ' and offer that date (this offer is not a persuasion attempt).'
+                verdict += ' It is AFTER the latest allowed date. Say the latest date you can record is ' + ', '.join([fmt(datetime.date.fromisoformat(f['deadline'])) + ' for ' + f['label'] for f in late]) + ' and offer that date (this offer is not a persuasion attempt). Say the latest-date sentence only ONCE in the call: do not repeat it in your later offers.'
                 f0 = late[0]
                 offers = f0.get('offers') or []
                 if str(DR.get('after_deadline_refusal') or 'persuasion') == 'close':

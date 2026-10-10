@@ -279,15 +279,44 @@ def test_callback_without_today():
 
 
 def test_callback_in_two_parts_and_next_week_weekday():
-    v = run("tp_resolve", {"now": NOW, "callback_day_text": "Sunday", "callback_time_text": "-"})
+    v = run("tp_resolve", {"now": NOW, "callback_day_text": "tomorrow", "callback_time_text": "-"})
     assert v["tp_status"] == "retry" and "not the time" in v["tp_verdict"] and v.get("tp_attempts") in (None, "0")
-    v["callback_day_text"] = "-"; v["callback_time_text"] = "in the morning at 10"
-    run("tp_resolve", v)
-    assert v["tp_status"] == "retry" and v["tp_attempts"] == "1"          # Sunday 10:00: complete and outside the window, the one retry
-    v["callback_day_text"] = "tomorrow"; v["callback_time_text"] = "2 pm"
+    v["callback_day_text"] = "-"; v["callback_time_text"] = "2 pm"
     run("tp_resolve", v)
     assert v["tp_status"] == "ok" and v["callback_date"] == "2026-10-15" and v["callback_time"] == "14:00"
+    # a day outside the allowed days is already the one failed proposal, even without a time
+    v = run("tp_resolve", {"now": NOW, "callback_day_text": "Sunday", "callback_time_text": "in the morning"})
+    assert v["tp_status"] == "retry" and v["tp_attempts"] == "1" and "ONCE" in v["tp_verdict"]
+    v["callback_day_text"] = "tomorrow"; v["callback_time_text"] = "2 pm"
+    run("tp_resolve", v)
+    assert v["tp_status"] == "ok" and v["callback_date"] == "2026-10-15"
+    # tonight is today; a second proposal outside the window ends it
+    v = run("tp_resolve", {"now": NOW, "callback_day_text": "-", "callback_time_text": "tonight at 9 pm"})
+    assert v["tp_status"] == "retry" and v["tp_attempts"] == "1"
+    v["callback_day_text"] = "Saturday"; v["callback_time_text"] = "noon"
+    run("tp_resolve", v)
+    assert v["tp_status"] == "no"
     w = facts([{"product_id": "p1", "type": "personal_loan", "past_due": 540, "days_late": 5, "instalment_amount": 180}])
     w["customer_date_text"] = "next week, on Thursday"
     run("resolve_date", w)
     assert w["resolved_date"] == "2026-10-22"
+
+
+def test_notes_backstop_fills_missing_note():
+    import compile as comp
+    spec = json.load(open(ROOT / "fixtures" / "brief-ab.spec.json"))
+    wf = comp.compile_workflow(spec, json.load(open(ROOT / "tools" / "openapi.json")))
+    assert wf["nodes"]["finalize"]["passthrough_default_transition"] == "notes_backstop"
+    code = wf["nodes"]["notes_backstop"]["pre_actions"][0]["function"]["parameters"]["properties"]["code"]["default"]
+    pf = json.dumps([{"product_id": "p1"}, {"product_id": "p2"}])
+    v = {"pf_json": pf, "promises_log": "p2;", "notes_log": "", "create_promise_success_count": "1", "call_outcome": "promise", "call_reason": ""}
+    exec(code, {"vars": v})
+    assert v["bn_go"] == "1" and v["bn_product"] == "p1" and v["bn_reason"] == "refused"
+    exec(code, {"vars": v})
+    assert v["bn_go"] == "0"                                  # nothing left
+    v = {"pf_json": pf, "promises_log": "p2;", "notes_log": "", "transfer_to_agent_success_count": "1"}
+    exec(code, {"vars": v})
+    assert v["bn_go"] == "0"                                  # a transfer never gets notes
+    v = {"pf_json": pf, "promises_log": "", "notes_log": "", "call_outcome": "paid", "call_reason": ""}
+    exec(code, {"vars": v})
+    assert v["bn_go"] == "1" and v["bn_reason"] == "paid"

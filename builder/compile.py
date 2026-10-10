@@ -218,7 +218,7 @@ def third_party_prompt(spec):
     t = spec.get("third_party") or {}
     cb = t.get("callback") or {}
     lines = ["Someone else answered, not the customer.", t.get("rules", ""), t.get("relative_rule", ""),
-             "Say nothing about the reason for the call, the account, any product or amount. If they offer to pay or ask what it is about, say you can only discuss it with the customer.",
+             "Say nothing about the reason for the call, the account, any product or amount. If they offer to pay or ask what it is about or why you ask, say you can only discuss it with the customer and ask again when the customer can be reached; a question back is not a refusal, do not end the call for it.",
              "Ask when the customer can be reached. A callback must be " + callback_days_text(cb) + f", between {cb.get('from', '')} and {cb.get('to', '')}" + (", and later than now" if cb.get("must_be_after_now", True) else "") + ". You need a day and a time. The system checks the day and time; if it says the time is not possible" + (", ask once for another time." if cb.get("ask_again_once", True) else ", do not ask again: say you will try another time and say goodbye."),
              "If they say the number does not belong to the customer, say thank you and goodbye.",
              (t.get("deceased") or {}).get("say", "") and ("If they say the customer has died, say exactly: \"" + t["deceased"]["say"] + "\" Ask nothing else and say goodbye."),
@@ -314,6 +314,9 @@ def negotiate_prompt(spec, tools):
         txt = f"{n}. {name.replace('_', ' ').upper()}: when {trig}: {beh}"
         if c.get("transfer_queue"):
             txt += f" To transfer, call transfer_to_agent with queue \"{c['transfer_queue']}\"" + (" only if the customer accepts" if name == "hardship" else "") + ", then say goodbye."
+            if name != "hardship":
+                txt += " This request comes first, even when it arrives in the same message as a payment offer: from that moment do not read back, confirm or record any promise that is not already recorded."
+
         if name == "hardship":
             if re.search(r"no (persuasion|reminder|attempt|pressure)|without (persua|press)|not (try to )?persuade", str(c.get("behaviour") or ""), re.I):
                 txt += " This rule comes first: make NO persuasion attempt, propose NO date and NO amount yourself, offer NO other team and NO plan."
@@ -469,7 +472,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         "task_message": third_party_prompt(spec), "max_node_turns": 6, "max_turn_transition": "set_no_callback", "truncation_strategy": "keep_all",
         "extraction_schema": [
             {"name": "tp_result", "type": "string", "enum_values": ["callback_time_given", "wrong_number", "deceased", "no_callback", "other"], "min_confidence": 0.5,
-             "description": "callback_time_given: the person named a day and/or a time when the customer can be reached. wrong_number: the person says this number does not belong to the customer. deceased: the person says the customer has died. no_callback: the person refuses to give any time or says the customer cannot be reached. other: anything else."},
+             "description": "callback_time_given: the person named a day and/or a time when the customer can be reached. wrong_number: the person says this number does not belong to the customer. deceased: the person says the customer has died. no_callback: the person clearly refuses to give any time or says the customer cannot be reached. A question back (why, who is calling, what is it about) is NOT a refusal: that is other. other: anything else."},
             {"name": "callback_day_text", "type": "string", "min_confidence": 0.4, "description": "The day the person named for reaching the customer, exactly as said (today, tomorrow, Friday, the 16th...). Empty if no day was named in the last message, or if the message ends with a correction that was cut off ('sorry,', 'I mean')."},
             {"name": "callback_time_text", "type": "string", "min_confidence": 0.4, "description": "The time of day the person named, exactly as said (around eleven, 3 pm, half past five, in the morning). Empty if no time was named in the last message, or if the message ends with a correction that was cut off ('sorry,', 'I mean')."},
         ],
@@ -694,7 +697,32 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
     if "add_note" in T:
         negotiate_set("_multi", True)
         nodes["compute_facts"]["transitions"].insert(0, tr("negotiate_multi", "several products", {"logic": "or", "conditions": [{"variable": "product_count", "operator": "greater_than", "operand": 1}]}))
-    nodes["finalize"] = code_node("finalize", snippet("finalize", libs=LIBS, SPEC=spec), "end_main")
+    after_finalize = "end_main"
+    mp_ = mp_settings(spec, T)
+    if "add_note" in T and mp_.get("enabled") and mp_.get("note_products_without_promise", True):
+        # safety net: the model sometimes says "I will note that" and never calls add_note
+        reasons = [str(r) for r in mp_.get("note_reasons") or []]
+        bn_map, claimed = [], set()
+        for c in spec.get("special_cases") or []:
+            if isinstance(c, dict) and c.get("note_reason") and str(c["note_reason"]) in reasons:
+                claimed.add(str(c["note_reason"]))
+                for o_ in [oc(c.get("decline_outcome"))] + ([] if c.get("transfer_queue") else [oc(c.get("outcome"))]):
+                    if o_[0]:
+                        bn_map.append([o_[0], o_[1], str(c["note_reason"])])
+        fo = oc((spec.get("confirm_record") or {}).get("failure_outcome"))
+        failed_r = next((r for r in reasons if "error" in r or "fail" in r), "")
+        if fo[0] and failed_r:
+            bn_map.append([fo[0], fo[1], failed_r])
+            claimed.add(failed_r)
+        ex = oc((spec.get("persuasion") or {}).get("exhausted_outcome"))
+        left = [r for r in reasons if r not in claimed]
+        bn_default = ex[1] if ex[1] in reasons else (left[0] if len(left) == 1 else ("refused" if "refused" in reasons else (left[0] if left else "")))
+        if bn_default:
+            nodes["notes_backstop"] = code_node("notes_backstop", snippet("notes_backstop", libs=LIBS, SPEC=spec, BN_MAP=bn_map, BN_DEFAULT=bn_default), "end_main",
+                                                [tr("backstop_note", "a product has neither a promise nor a note", cond_eq("bn_go", "1"))])
+            nodes["backstop_note"] = api_node("backstop_note", tool_json(T["add_note"], {**cust("add_note"), N.get("product_id", "product_id"): "{{bn_product}}", N.get("reason", "reason"): "{{bn_reason}}"}, "Note a product that ended without a promise.", model_fields=[]), "notes_backstop")
+            after_finalize = "notes_backstop"
+    nodes["finalize"] = code_node("finalize", snippet("finalize", libs=LIBS, SPEC=spec), after_finalize)
     nodes["end_main"] = end_node("end_main", None)
 
     # lifecycle close_call
