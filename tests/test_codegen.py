@@ -124,6 +124,10 @@ def test_tp_callback_window():
     v = {"now": NOW, "callback_day_text": "today", "callback_time_text": "10:30"}
     run("tp_resolve", v)
     assert v["tp_status"] == "retry"  # not later than now
+    for text, want in (("five p.m.", "17:00"), ("five thirty pm", "17:30"), ("at five", "17:00"), ("ten in the morning", "10:00"), ("quarter past three", "15:15")):
+        v = {"now": NOW, "callback_day_text": "tomorrow", "callback_time_text": text}
+        run("tp_resolve", v)
+        assert v["callback_time"] == want, (text, v["tp_verdict"])
     v = {"now": NOW, "callback_day_text": "tomorrow", "callback_time_text": "eleven ten, sorry, I mean eleven"}
     run("tp_resolve", v)
     assert v["tp_status"] == "ok" and v["callback_time"] == "11:00"

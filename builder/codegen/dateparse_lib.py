@@ -239,7 +239,14 @@ def parse_time_text(text):
         minute = 45; hour -= 1
     else:
         ws = re.sub(r'\b(\d\d?)\b', ' ', s)
-        m2 = re.search(r'\b(thirty|fifteen|forty five|forty-five|twenty|ten|five)\b', ws)
+        toks = ws.split()
+        hour_i = -1
+        for i, t in enumerate(toks):
+            if word_number(t) == hour or (i + 1 < len(toks) and word_number(t + ' ' + toks[i + 1]) == hour):
+                hour_i = i
+                break
+        rest = ' '.join(toks[hour_i + 1:]) if hour_i >= 0 else ''
+        m2 = re.search(r'\b(thirty|fifteen|forty five|forty-five|twenty|ten|five)\b', rest) if m is None else None
         if m2 and hour is not None and 'half' not in s:
             v = word_number(m2.group(1))
             if v is not None and 0 < v < 60:
