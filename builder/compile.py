@@ -336,7 +336,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
                                "description": "customer: ONLY when the person clearly confirmed they are the customer (yes, that's me, speaking, or said the customer's own name); 'hello', 'go ahead' or 'who is this' are NOT a confirmation. third_party: a different person answered, or the person says the customer is not available, is someone else, has died, or that this is a wrong number. unclear: anything else (hello, who is this, go ahead, a question)."}],
         "tools": [],
         "transitions": [
-            tr("identity_q1", "the customer confirmed their identity", cond_eq("who_answered", "customer")),
+            tr("mark_reached", "the customer confirmed their identity", cond_eq("who_answered", "customer")),
             tr("third_party", "someone else answered", cond_eq("who_answered", "third_party")),
             {"target_node": "set_unclear", "description": "The person did not confirm being the customer after the second ask (answers like hello, go ahead, who is this).", "is_tool_call": True,
              "condition": {"operator": "matches_intent", "description": "still unclear who is on the line after two asks"}},
@@ -473,6 +473,8 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
                  "condition": {"operator": "matches_intent", "description": "The customer declined the security check for the second time"}},
             ],
         }
+    # the right person is on the line: from here an abandoned call is a declined check, no longer "not reached"
+    nodes["mark_reached"] = set_node("mark_reached", decl_o[0], decl_o[1], "identity_q1" if qs else "get_account")
     nodes["set_failed"] = set_node("set_failed", fail_o[0], fail_o[1], "end_failed")
     nodes["end_failed"] = end_node("end_failed", "I could not verify your identity, so I cannot continue this call. " + ((idn.get("fail") or {}).get("say") or "Please use the mobile app or visit a branch.").replace("Do not state the debt.", "").replace("Tell the customer to", "Please").strip() + " Thank you, goodbye.")
     nodes["set_declined"] = set_node("set_declined", decl_o[0], decl_o[1], "end_declined")
