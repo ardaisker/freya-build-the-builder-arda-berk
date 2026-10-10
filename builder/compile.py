@@ -141,6 +141,8 @@ def system_prompt(spec: dict) -> str:
         "HONESTY: never say that something is recorded, scheduled or transferred unless the tool result says ok. If a tool fails, say so.",
         "After every tool result, either speak to the customer or call the next tool. Never end a turn with nothing.",
         "Call one tool per message. Do not invent figures, dates, product names or reasons: use only the facts given to you and the tool results.",
+        "Customers often talk about unrelated things (their day, the traffic, a wedding, a question back). Do not comment on it. A day or a number the customer mentions for something else is not an answer to your question. Answer a question back in one short sentence, then continue where you were. Repeat a question only if the customer has not answered it yet; if they answered it, act on the answer.",
+        "Say a sympathy sentence at most once in the whole call.",
     ]
     if o.get("ai_question_answer"):
         lines.append("If asked whether you are a robot or an AI: " + o["ai_question_answer"])
@@ -497,9 +499,9 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         "                d2 = result.setdefault('data', dict()) if isinstance(result.get('data'), dict) else None\n"
         "                result['what_to_do_next'] = 'NOT recorded: unknown product_id. Use the exact product id from the facts (p1, p2, ...) and call create_promise again.'\n"
         "            elif n < 2:\n"
-        "                result['what_to_do_next'] = 'The promise was NOT saved (' + err + '). Do not use the word recorded at all in your reply (not even not recorded). Say only that there was a technical problem and that you will try once more, then call create_promise again with the same values.'\n"
+        "                result['what_to_do_next'] = 'The promise was NOT saved. Do not repeat any error text and do not use the word recorded at all in your reply (not even not recorded). Say only that there was a technical problem and that you will try once more, then call create_promise again with the same values.'\n"
         "            else:\n"
-        "                result['what_to_do_next'] = 'The promise was NOT saved again (' + err + '). Do not use the word recorded in your reply. Tell the customer you could not save the promise" + (" and that the product is noted as service_error" if mp.get("enabled") else "") + ", thank them, say goodbye and call transition_to_finalize.'\n"
+        "                result['what_to_do_next'] = 'The promise was NOT saved again. Do not repeat any error text and do not use the word recorded in your reply. Tell the customer you could not save the promise" + (" and that the product is noted as service_error" if mp.get("enabled") else "") + ", thank them, say goodbye and call transition_to_finalize.'\n"
         "            if isinstance(d, dict):\n"
         "                d['what_to_do_next'] = result['what_to_do_next']\n"
         "except Exception:\n"
