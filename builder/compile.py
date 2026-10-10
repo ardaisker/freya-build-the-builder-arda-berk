@@ -99,7 +99,7 @@ def code_node(name, code, nxt, extra_transitions=None):
 
 
 def set_node(name, outcome, reason, nxt):
-    code = "vars['outcome'] = '" + outcome.replace("'", "") + "'\nvars['reason'] = '" + (reason or "").replace("'", "") + "'\n"
+    code = "vars['call_outcome'] = '" + outcome.replace("'", "") + "'\nvars['call_reason'] = '" + (reason or "").replace("'", "") + "'\n"
     return code_node(name, code, nxt)
 
 
@@ -425,7 +425,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         )
         tool = tool_json(T["verify_identity"], {"customer_id": "{{customer_id}}", "field": str(q.get("field"))},
                          f"Check the customer's answer to this security question. CALL it as soon as the customer gives the answer, with the answer sent as: {q.get('answer_format', '')}. {q.get('notes', '')} Then follow what_to_do_next in the result.".strip(),
-                         hooks={"post_process_code": post, "pre_process_code": "try:\n    vars['outcome'] = '" + decl_o[0] + "'\n    vars['reason'] = '" + decl_o[1] + "'\nexcept Exception:\n    pass\n"})
+                         hooks={"post_process_code": post, "pre_process_code": "try:\n    vars['call_outcome'] = '" + decl_o[0] + "'\n    vars['call_reason'] = '" + decl_o[1] + "'\nexcept Exception:\n    pass\n"})
         task = "\n".join(x for x in [
             f"Security question {i + 1} of {len(qs)}: {q.get('ask', '')}",
             f"When the customer answers, call verify_identity with the answer formatted as: {q.get('answer_format', '')}. {q.get('notes', '')}".strip(),
@@ -484,8 +484,8 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         "            pid = ''\n"
         "        if isinstance(d, dict) and d.get('ok') in (True, 'true', 'True'):\n"
         "            vars['promises_log'] = str(vars.get('promises_log') or '') + pid + ';'\n"
-        "            vars['outcome'] = 'promise'\n"
-        "            vars['reason'] = ''\n"
+        "            vars['call_outcome'] = 'promise'\n"
+        "            vars['call_reason'] = ''\n"
         "            d['what_to_do_next'] = 'The promise is recorded. Tell the customer it is recorded" + (" and say exactly: " + recorded_say if recorded_say else "") + ". Then continue with the next product if any, otherwise thank them, say goodbye and call transition_to_finalize in the same message.'\n"
         "        else:\n"
         "            err = ''\n"
@@ -532,13 +532,13 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         tools.append(tool_json(T["transfer_to_agent"], {"customer_id": "{{customer_id}}"},
                                "Hand the call to a person. CALL it only in the cases the rules name (with the queue the rule names). After the result, say goodbye and call transition_to_finalize.",
                                hooks={"pre_process_code": "try:\n    vars['transfer_queue'] = str((config or dict()).get('body', dict()).get('queue', ''))\nexcept Exception:\n    pass\n",
-                                      "post_process_code": "try:\n    if isinstance(result, dict):\n        result.pop('header', None)\n        d = result.get('data')\n        if isinstance(d, dict):\n            if d.get('ok') in (True, 'true', 'True'):\n                qm = " + json.dumps(queue_outcomes) + "\n                q = str(vars.get('transfer_queue') or '')\n                o = qm.get(q) or ['transferred', q]\n                vars['outcome'] = o[0]\n                vars['reason'] = o[1]\n                d['what_to_do_next'] = 'Transferred. Tell the customer a colleague will take over, say goodbye and call transition_to_finalize in the same message.'\n            else:\n                d['what_to_do_next'] = 'The transfer failed. Say so, apologise, and end the call politely with transition_to_finalize.'\nexcept Exception:\n    pass\n"}))
+                                      "post_process_code": "try:\n    if isinstance(result, dict):\n        result.pop('header', None)\n        d = result.get('data')\n        if isinstance(d, dict):\n            if d.get('ok') in (True, 'true', 'True'):\n                qm = " + json.dumps(queue_outcomes) + "\n                q = str(vars.get('transfer_queue') or '')\n                o = qm.get(q) or ['transferred', q]\n                vars['call_outcome'] = o[0]\n                vars['call_reason'] = o[1]\n                d['what_to_do_next'] = 'Transferred. Tell the customer a colleague will take over, say goodbye and call transition_to_finalize in the same message.'\n            else:\n                d['what_to_do_next'] = 'The transfer failed. Say so, apologise, and end the call politely with transition_to_finalize.'\nexcept Exception:\n    pass\n"}))
     if "add_note" in T and mp.get("enabled"):
         tools.append(tool_json(T["add_note"], {"customer_id": "{{customer_id}}"},
                                "Record why one product ends without a promise. CALL it once per product without a promise, with the reason the rules name. Never after a transfer.",
                                model_fields=["product_id", "reason"],
-                               hooks={"pre_process_code": "try:\n    b = (config or dict()).get('body', dict())\n    vars['notes_log'] = str(vars.get('notes_log') or '') + str(b.get('product_id', '')) + ':' + str(b.get('reason', '')) + ';'\n    if not str(vars.get('promises_log') or ''):\n        nm = " + json.dumps(note_outcomes) + "\n        o = nm.get(str(b.get('reason', '')))\n        if o:\n            vars['outcome'] = o[0]\n            vars['reason'] = o[1]\nexcept Exception:\n    pass\n",
-                                      "post_process_code": "try:\n    if isinstance(result, dict):\n        result.pop('header', None)\n        d = result.get('data')\n        if isinstance(d, dict):\n            d['what_to_do_next'] = 'Noted. Continue with the next product, or if all products are handled, thank the customer, say goodbye and call transition_to_finalize.'\nexcept Exception:\n    pass\n"}))
+                               hooks={"pre_process_code": "try:\n    b = (config or dict()).get('body', dict())\n    vars['notes_log'] = str(vars.get('notes_log') or '') + str(b.get('product_id', '')) + ':' + str(b.get('reason', '')) + ';'\n    if not str(vars.get('promises_log') or ''):\n        nm = " + json.dumps(note_outcomes) + "\n        o = nm.get(str(b.get('reason', '')))\n        if o:\n            vars['call_outcome'] = o[0]\n            vars['call_reason'] = o[1]\nexcept Exception:\n    pass\n",
+                                      "post_process_code": "try:\n    if isinstance(result, dict):\n        result.pop('header', None)\n        d = result.get('data')\n        if isinstance(d, dict):\n            if d.get('ok') in (True, 'true', 'True'):\n                d['what_to_do_next'] = 'Noted. Continue with the next product, or if all products are handled, thank the customer, say goodbye and call transition_to_finalize.'\n            else:\n                d['what_to_do_next'] = 'The note was NOT saved (' + str(d.get('error') or 'error') + '). Call add_note again with the product_id and one of the allowed reasons.'\nexcept Exception:\n    pass\n"}))
     def negotiate_set(suffix, with_notes):
         name = "negotiate" + suffix
         ntools = [t for t in tools if with_notes or t["function"]["name"] != "add_note"]
@@ -570,7 +570,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
             o = oc(c.get(pick) or c.get("outcome"))
             if not o[0]:
                 continue
-            nodes[f"mark_{flag}{suffix}"] = code_node(f"mark_{flag}{suffix}", "vars['" + flag + "_marked'] = '1'\nif not str(vars.get('promises_log') or ''):\n    vars['outcome'] = '" + o[0] + "'\n    vars['reason'] = '" + o[1] + "'\n", name)
+            nodes[f"mark_{flag}{suffix}"] = code_node(f"mark_{flag}{suffix}", "vars['" + flag + "_marked'] = '1'\nif not str(vars.get('promises_log') or ''):\n    vars['call_outcome'] = '" + o[0] + "'\n    vars['call_reason'] = '" + o[1] + "'\n", name)
             nodes[name]["transitions"].insert(0, tr(f"mark_{flag}{suffix}", f"the customer mentioned {flag}", cond_and({"variable": f"{flag}_flag", "operator": "equals", "operand": flag}, {"variable": f"{flag}_marked", "operator": "is_not_set"})))
 
     negotiate_set("", False)
@@ -585,11 +585,11 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
     for row in cl.get("outcome_table") or []:
         if row.get("outcome") and not row.get("reason"):
             no_reason.add(row["outcome"])
-    close_tool = tool_json(T["close_call"], {"customer_id": "{{customer_id}}", "outcome": "{{outcome}}", "reason": "{{reason}}"}, "Record how the call ended.",
+    close_tool = tool_json(T["close_call"], {"customer_id": "{{customer_id}}", "outcome": "{{call_outcome}}", "reason": "{{call_reason}}"}, "Record how the call ended.",
                            lifecycle=["end_of_call"],
                            hooks={"pre_process_code": "try:\n    b = config.get('body')\n    if isinstance(b, dict):\n        if not b.get('reason') or b.get('outcome') in " + json.dumps(sorted(no_reason)) + ":\n            b.pop('reason', None)\nexcept Exception:\n    pass\n"})
 
-    nodes["setup"] = code_node("setup", "vars['outcome'] = '" + uo[0] + "'\nvars['reason'] = '" + uo[1] + "'\nvars['customer_date_text'] = '-'\nvars['date_verdict'] = '-'\nvars['tp_verdict'] = '-'\n", "opening")
+    nodes["setup"] = code_node("setup", "vars['call_outcome'] = '" + uo[0] + "'\nvars['call_reason'] = '" + uo[1] + "'\nvars['customer_date_text'] = '-'\nvars['date_verdict'] = '-'\nvars['tp_verdict'] = '-'\n", "opening")
     wf = {
         "initial_node": "setup",
         "system_prompt": system_prompt(spec),

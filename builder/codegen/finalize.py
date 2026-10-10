@@ -79,8 +79,8 @@ try:
         outcome, reason = _oc((SPEC.get('persuasion') or dict()).get('exhausted_outcome'))
     if not outcome:
         outcome, reason = 'no_promise', 'refused'
-    vars['outcome'] = outcome
-    vars['reason'] = reason
+    vars['call_outcome'] = outcome
+    vars['call_reason'] = reason
 except Exception as e:
-    vars['outcome'] = 'no_promise'
-    vars['reason'] = 'refused'
+    vars['call_outcome'] = 'no_promise'
+    vars['call_reason'] = 'refused'

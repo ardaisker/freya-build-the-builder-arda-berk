@@ -63,7 +63,7 @@ vars['notes_log'] = getv('notes_log', '')
 try:
     eo = (SPEC.get('persuasion') or dict()).get('exhausted_outcome') or dict()
     if eo.get('outcome'):
-        vars['outcome'] = str(eo.get('outcome'))
-        vars['reason'] = str(eo.get('reason') or '')
+        vars['call_outcome'] = str(eo.get('outcome'))
+        vars['call_reason'] = str(eo.get('reason') or '')
 except Exception:
     pass
