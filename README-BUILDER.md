@@ -1,40 +1,60 @@
 # Our builder (team arda-berk)
 
-One command, a brief (or two) plus the tool API file in, a phone agent on Freya out, with a plain-text trace.
+One command. A brief and a tool API file go in, a phone agent on Freya comes out, with a plain-text trace.
 
 ```bash
-cp env.example env.sh && $EDITOR env.sh        # FREYA_API_KEY, FREYA_BANK_TEAM_KEY
-python3.12 -m venv .venv && . .venv/bin/activate && pip install claude-agent-sdk pytest
-source env.sh
-python3 builder/build.py briefs/brief-a.md tools/openapi.json --cases public-test-set.json --brief A
+python3.12 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
+cp env.example env.sh && $EDITOR env.sh && source env.sh        # FREYA_API_KEY, FREYA_BANK_TEAM_KEY
+python3 builder/build.py briefs/brief-a.md tools/openapi.json
 python3 builder/build.py briefs/brief-a.md briefs/brief-b.md tools/openapi.json --cases public-test-set.json --brief B
 ```
 
-The model steps use the Claude Agent SDK: a Claude login or `ANTHROPIC_API_KEY` is needed (model `claude-opus-5-5`,
-override with `BUILDER_MODEL`). Everything else is standard-library Python.
+The brief may be one file, several files, or a folder (a mail, a policy extract, a memo, a code list). The tool API is
+whichever file parses as an OpenAPI document. The two model steps use the Claude Agent SDK, so a Claude login or
+`ANTHROPIC_API_KEY` is needed (model `claude-opus-5-5`, override with `BUILDER_MODEL`). Everything else is the standard library.
 
-## How it works
+## What the builder does
 
-1. **extract** (`builder/extract.py`, one model call): the brief(s) and the tool API go in, a generic policy spec comes
-   out (`builder/spec_schema.json`): identity questions, calendar and holidays, lateness bands and deadlines, floor
-   rule, persuasion attempts, special cases, outcome table, multi-product rules, and every leftover rule verbatim.
-   Enum values (outcomes, reasons, queues, fields) are validated against the API file.
-2. **compile** (`builder/compile.py`, no model): a fixed topology is filled from the spec. Date arithmetic, bands,
-   deadlines, floors and the outcome decision run as Python in code nodes (`builder/codegen/`), the dialogue model gets
-   finished facts. One node per security question with the tool's `field` baked in. `close_call` is a lifecycle tool
-   fed by variables that code nodes set.
-3. **lint** (`builder/lint.py`): the platform rules from `docs/` checked offline.
-4. **validate, save, smoke**: dry run, `freya.save_workflow(slot)` (in place), one chat turn.
-5. **test** (`tools/run_cases.py`, the kit's scorer) and **patch** (`builder/patch.py`, one model call per round): failed
-   transcripts go back to the model, which may only revise the spec; the topology stays. Bounded by `--max-test-rounds`
-   and the 30-minute budget (`--budget-min`, default 27).
-6. **export** to `submission/<slot>.workflow.json`.
+| Step | File | Model? | What happens |
+|---|---|---|---|
+| 1 extract | `builder/extract.py`, `spec_schema.json` | yes, 1 call | The material becomes a policy spec: opening, identity questions, calendar, lateness bands, deadline and offer rules as small rule objects, floor rule, special cases, outcome table, several-product rules, and every leftover rule word for word. |
+| 1b audit | `builder/extract.py` | yes, 1 call | The spec is checked against the material. Only corrections with a quote from the material are applied (for example a memo that changes a limit). |
+| 2 compile | `builder/compile.py`, `builder/apimap.py`, `builder/codegen/` | no | A fixed call structure is filled from the spec. Dates, deadlines, floors, offers and the closing outcome are computed by Python inside the workflow, so the phone agent's model is given finished facts. |
+| 2b self-check | `builder/build.py` | no | Every code step is run locally on made-up customers built from the tool API (each product type in each band). |
+| 3 lint | `builder/lint.py` | no | The platform rules from `docs/`, checked offline. |
+| 4 save, smoke | `freya.py` | no | Dry run, `save_workflow(slot)` in place, one chat turn. |
+| 5 test, patch | `tools/run_cases.py`, `builder/patch.py` | patch: 1 call per round | Only when practice customers are given (`--cases`). Failed transcripts go back to the model, which may revise the spec, never the structure. |
+| 6 export | `freya.py` | no | `submission/<slot>.workflow.json` |
 
-Trace: `traces/<slot>-<time>.log` (start/end, every model call with its purpose, what was created on Freya, every test
-and its result). Unit tests for the code nodes: `pytest tests/`.
+The trace is `traces/<slot>-<time>.log`: start and end, each model call with its purpose, what was created on Freya,
+each test with its result.
 
-Probe a workflow quickly (crash checks only, the chat route is not the scored engine):
-`python3 builder/probe.py <workflow_id> PUB-01 "Yes, speaking." "14 March 1988" "4471"`.
+## Why it reads a brief instead of knowing one
+
+Nothing in `builder/` names a bank, a holiday, an outcome, a queue or a field of the tool API.
+
+- **Tool API.** `apimap.py` matches each role (the amount of a promise, the list of products, the "verified" flag, the
+  close outcome...) to the property the API file declares. The model's `api` section is used where it names a real
+  property; otherwise a name-pattern match; `tests/` runs a fixture in which every field and value is renamed.
+- **Rules.** Deadlines and offers are rule objects (`business_days_after_today`, `calendar_days_after_today`,
+  `last_business_day_of_week`, `end_of_month`, `deadline`, ...), evaluated in code against the spec's calendar.
+- **Outcomes.** Every outcome the workflow can record comes from the spec and is checked against the API's values.
+- **Unknown rules.** Anything the schema has no slot for is kept verbatim in the prompts (`residual_rules`); special
+  cases the brief adds get their own exit that records their outcome.
+
+Fixtures written by the team (synthetic, in `fixtures/`): raw bank material with a memo that overrides the policy;
+a brief whose tool API is fully renamed; a brief with three identity questions, calendar-day deadlines, three offers,
+a percentage floor and extra special cases. `fixtures/edge-cases.json` holds 42 extra customer behaviours for the 13
+practice customers, run with `builder/run_custom.py` (same scorer and judge as the kit).
+
+## Tests
+
+```bash
+pytest tests/                                   # code steps, API map, date rules, generalisation fixtures (no network)
+python3 builder/build.py fixtures/variant-brief.md fixtures/variant.openapi.json --no-freya     # offline build
+python3 tools/run_cases.py <agent_id> --brief A --reps 2
+python3 builder/run_custom.py <agent_id> --reps 2
+```
 
 ## Final run (hidden briefs)
 
@@ -44,6 +64,5 @@ python3 builder/build.py briefs/hidden-1.md briefs/hidden-1.openapi.json --slot 
 python3 builder/build.py briefs/hidden-2.md briefs/hidden-2.openapi.json --slot hidden-2 2>&1 | tee traces/hidden-2.log
 ```
 
-Without `--cases` the builder runs no practice simulation (there are none for a hidden brief): extract, compile, lint,
-dry-run, save, one smoke turn, export. `submission/<slot>.workflow.json` is the exported phone agent. Fill
-`submission/FORM-TEMPLATE.json`, commit, push, send.
+Without `--cases` no practice simulation runs (a hidden brief has none): extract, audit, compile, self-check, lint,
+dry run, save, one smoke turn, export. Fill `submission/FORM-TEMPLATE.json`, commit, push, send.
