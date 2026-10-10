@@ -202,13 +202,40 @@ def identity_prompt(spec):
     return "\n".join(lines)
 
 
+MP_DEFAULTS = {
+    "order": "If the customer cannot pay all products today, go through the products one by one, in the order of the facts.",
+    "one_date_after_a_deadline": "If the customer names one date for everything and it is after one product's deadline, record that product on its own deadline and say so in the read-back; the other products keep the named date.",
+    "promise_failed_twice": "If create_promise fails twice for one product, keep the promises that were recorded and call add_note with reason service_error for that product.",
+    "closing": "promise if at least one promise was recorded; paid if every product is noted paid; otherwise no_promise with the reason of the first product whose note is not paid.",
+}
+
+
+def mp_settings(spec, tools):
+    """Multi-product rules: the spec's, with defaults where the brief is silent. Enabled whenever add_note exists."""
+    mp = dict(spec.get("multi_product") or {})
+    brief_has_rules = bool(mp.get("enabled"))
+    if not brief_has_rules:
+        mp = {}          # the brief is silent on several products: use the generic defaults in full
+    mp["enabled"] = brief_has_rules or ("add_note" in tools)
+    for k, v in MP_DEFAULTS.items():
+        if not mp.get(k):
+            mp[k] = v
+    for k in ("ask_all_today_first", "per_product_attempts", "one_readback_one_confirmation", "note_products_without_promise", "dispute_or_paid_does_not_end_call", "transfer_no_notes"):
+        if k not in mp:
+            mp[k] = True
+    if not mp.get("note_reasons"):
+        t = tools.get("add_note") or {}
+        mp["note_reasons"] = ((t.get("properties") or {}).get("reason") or {}).get("enum") or []
+    return mp
+
+
 def negotiate_prompt(spec, tools):
     ds = spec.get("debt_statement") or {}
     dr = spec.get("date_rules") or {}
     am = spec.get("amounts") or {}
     pe = spec.get("persuasion") or {}
     cr = spec.get("confirm_record") or {}
-    mp = spec.get("multi_product") or {}
+    mp = mp_settings(spec, tools)
     cases = {c.get("name"): c for c in spec.get("special_cases") or []}
     lines = ["The customer is verified and the account was loaded successfully. Facts about the account, computed by the bank's system (authoritative; never say the service failed in this step unless a tool result in this step says so):", "{{facts}}", "",
              "DATE CHECK result for the last day the customer named (if any): {{date_verdict}}", "",
@@ -251,7 +278,7 @@ def negotiate_prompt(spec, tools):
     ]
     n += 2
     if mp.get("enabled"):
-        lines.append(f"{n}. SEVERAL PRODUCTS: " + " ".join(x for x in [mp.get("order") and ("Go through the products in this order: " + mp["order"] + "."), ("Persuasion attempts are counted per product; start each product at attempt 1. Ask 'today?' ONCE for all products together and NEVER again per product: a question like 'Can you pay this today?' for a single product counts as a wasted attempt. For each product go straight to attempt 1 = its full past-due amount on the ATTEMPT-1 DATE (or the floor if the customer said the full amount is too much); attempt 2, only where allowed, = the floor on that product's deadline. Each product gets EXACTLY the number of attempts written in its facts line (a product with 'attempts allowed: 1' gets attempt 1 only, never attempt 2). After a product's attempts are used up, stop asking about that product, note it, and move to the next product." if mp.get("per_product_attempts", True) else ""), mp.get("one_date_after_a_deadline"), ("Read all promises back together and ask for one confirmation, then call create_promise once per product." if mp.get("one_readback_one_confirmation", True) else ""), (("For each product without a promise call add_note with that product_id and a reason: " + ", ".join(mp.get("note_reasons") or []) + ".") if mp.get("note_products_without_promise", True) else ""), ("A dispute or an already-paid claim on one product does not end the call: note it and continue with the others." if mp.get("dispute_or_paid_does_not_end_call", True) else ""), ("On any transfer add no notes at all." if mp.get("transfer_no_notes", True) else ""), mp.get("promise_failed_twice"), mp.get("closing") and ("The closing outcome is chosen by the system: " + mp["closing"])] if x))
+        lines.append(f"{n}. IF THERE ARE SEVERAL PRODUCTS (see the facts; with one product skip this rule): " + " ".join(x for x in [mp.get("order"), ("Persuasion attempts are counted per product; start each product at attempt 1. Ask 'today?' ONCE for all products together and NEVER again per product: a question like 'Can you pay this today?' for a single product counts as a wasted attempt. For each product go straight to attempt 1 = its full past-due amount on the ATTEMPT-1 DATE (or the floor if the customer said the full amount is too much); attempt 2, only where allowed, = the floor on that product's deadline. Each product gets EXACTLY the number of attempts written in its facts line (a product with 'attempts allowed: 1' gets attempt 1 only, never attempt 2). After a product's attempts are used up, stop asking about that product, note it, and move to the next product." if mp.get("per_product_attempts", True) else ""), mp.get("one_date_after_a_deadline"), ("Read all promises back together and ask for one confirmation, then call create_promise once per product." if mp.get("one_readback_one_confirmation", True) else ""), (("For each product without a promise call add_note with that product_id and a reason: " + ", ".join(mp.get("note_reasons") or []) + ".") if mp.get("note_products_without_promise", True) else ""), ("A dispute or an already-paid claim on one product does not end the call: note it and continue with the others." if mp.get("dispute_or_paid_does_not_end_call", True) else ""), ("On any transfer add no notes at all." if mp.get("transfer_no_notes", True) else ""), mp.get("promise_failed_twice"), mp.get("closing") and ("The closing outcome is chosen by the system: " + mp["closing"])] if x))
         n += 1
     cl = spec.get("closing") or {}
     lines += [
@@ -271,7 +298,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
     tp = spec.get("third_party") or {}
     idn = spec.get("identity") or {}
     cr = spec.get("confirm_record") or {}
-    mp = spec.get("multi_product") or {}
+    mp = mp_settings(spec, T)
     cl = spec.get("closing") or {}
     cases = {c.get("name"): c for c in spec.get("special_cases") or []}
     farewell = cl.get("farewell") or "Thank you for your time. Goodbye."
