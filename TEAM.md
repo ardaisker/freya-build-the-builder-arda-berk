@@ -32,6 +32,12 @@ Gizli brief'lerde alan adları, değerler ve kurallar değişecek; builder artı
   4. Sentetik fixture brief'leri: `fixtures/` altına ham-malzeme biçimli bir brief + farklı takvim/kimlik soruları + değişik openapi enum'ları.
 - Agent id'ler: `.freya-agents.json` (gitignored) ve `out/<slot>/ids.json`.
 
+## Kredi bütçesi (Cmt 21:20)
+- Ölçüm: yaklaşık **0,08 kredi / simüle çağrı** (18,4 kredi ≈ 250 çağrı). Şu an 407 kredi; bugün toplam 1.358 çağrı koştu.
+- Final (Paz 20:00): builder gizli brief'lerde simülasyon koşturmaz (pratik müşteri yok), yalnız 1 chat turu → ihmal edilebilir. Puanlamayı organizatör kendi workspace'inde yapar.
+- **Rezerv: 100 kredi** (≈1.250 çağrı): gizli brief'lerle pratik müşteri gelirse 2 brief × 30 müşteri × 3 tekrar × 3 tur ≈ 43 kredi + hata düzeltme regresyonları ≈ 25 kredi + pay.
+- Harcanabilir: ~300 kredi ≈ 3.800 çağrı. Koruma: `python3 builder/credits.py <çağrı sayısı>` (rezervin altına inecekse 1 döner); `run_custom.py` bunu kendisi yapar. Kit'in `run_cases.py`'sinden önce elle çağır.
+
 ## Kurallar
 - Tek workspace: aynı anda tek simülasyon; `run_cases.py` bekler. Uzun koşular tmux'ta.
 - Anahtarlar `env.sh`'de, asla commit edilmez, asla yazdırılmaz.

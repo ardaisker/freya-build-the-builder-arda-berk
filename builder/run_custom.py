@@ -5,7 +5,7 @@ on a base public customer (`base`) and brings its own script, expected ledger an
 """
 import argparse, hashlib, json, pathlib, sys, time
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "tools"))
+sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "tools")); sys.path.insert(0, str(ROOT / "builder"))
 import freya
 from score import http as _http, score_ledger
 from run_cases import persona_for, STYLES
@@ -34,6 +34,9 @@ def main():
         made = freya.create_personas([spec[c["id"]] for c in new])["personas"]
         ids.update({key[c["id"]]: p["id"] for c, p in zip(new, made)}); json.dump(ids, open(store, "w"), indent=1)
     ids = {c["id"]: ids[key[c["id"]]] for c in cases}
+    import credits
+    if not credits.allow(len(cases) * a.reps, f"{len(cases)} cases x {a.reps}"):
+        sys.exit(2)
     reps, total_s = [], 0
     for rep in range(a.reps):
         rows, sim_id, took = run_once(a.agent_id, cases, ids)
