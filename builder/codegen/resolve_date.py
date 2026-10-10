@@ -15,7 +15,7 @@ try:
         vars['vague_hint'] = 'next' if ('next week' in low or 'week after' in low or 'following week' in low) else ('this' if 'this week' in low else '')
         dls = sorted(set([f['deadline'] for f in pf]))
         prop = ', '.join([fmt(datetime.date.fromisoformat(x)) for x in dls]) if dls else 'the deadline'
-        verdict = 'DATE CHECK: "' + text + '" is not an exact day. Ask once for the exact day.' + ('' if str(DR.get('vague_fallback') or 'deadline') == 'none' else ' If the customer still gives none, propose the latest allowed date: ' + prop + '.')
+        verdict = 'DATE CHECK: "' + text + '" is not an exact day. Ask once for the exact day.' + ('' if str(DR.get('vague_fallback') or 'deadline') == 'none' else ' If the customer still gives none (for example says they do not know), propose the latest allowed date, ' + prop + ', and no other date.')
         status = 'vague'
     elif d is None:
         verdict = 'DATE CHECK: "' + text + '" could not be understood as a day. Ask the customer for the exact day (for example "Friday the sixteenth of October").'

@@ -15,5 +15,6 @@ if __name__ == "__main__":
     if not credits.allow(n * reps, "the practice set"):
         sys.exit(2)
     resilient.install()
+    resilient.install_watchdog()
     import run_cases
     run_cases.main()
