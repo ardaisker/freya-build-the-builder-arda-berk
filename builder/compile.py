@@ -229,7 +229,7 @@ def negotiate_prompt(spec, tools):
         if c.get("transfer_queue"):
             txt += f" To transfer, call transfer_to_agent with queue \"{c['transfer_queue']}\"" + (" only if the customer accepts" if name == "hardship" else "") + ", then say goodbye."
         if name == "hardship":
-            txt += " This rule comes first: make NO persuasion attempt, propose NO date and NO amount, offer NO other team and NO plan. If they decline the support team, say you understand, thank them, say goodbye and call transition_to_finalize. Only if the customer themselves names a date or an amount, record that promise under the date and amount rules."
+            txt += " This rule comes first: make NO persuasion attempt, propose NO date and NO amount, offer NO other team and NO plan. Offer the support team exactly ONCE in the whole call; if the customer declines it, asks for a discount instead, or does not answer, never mention the support team again. If they decline the support team, say you understand, thank them, say goodbye and call transition_to_finalize. Only if the customer themselves names a date or an amount, record that promise under the date and amount rules."
         if name == "already_paid":
             txt += " Take no promise. Then thank them, say goodbye and call transition_to_finalize."
         if name == "dispute":
@@ -246,7 +246,7 @@ def negotiate_prompt(spec, tools):
     lines += [
         f"{n}. CONFIRM AND RECORD: " + " ".join(x for x in [cr.get("readback"), ("Call create_promise only after a clear yes." if cr.get("record_only_after_clear_yes", True) else ""), cr.get("changed_at_readback"), ("One promise per product." if cr.get("one_promise_per_product", True) else ""), cr.get("cannot_change_recorded")] if x) +
         " Use the product_id from the facts (for example the id written after PRODUCT). Send the date as YYYY-MM-DD and the amount as a number.",
-        f"{n + 1}. After create_promise, read the what_to_do_next line of the tool result and do exactly that. Say that the promise is recorded ONLY when the result says ok. If it failed: " + (f"try once more; if it fails again, {cr.get('failure_say') or 'say you could not record it'}." if cr.get("retry_on_failure", 1) else (cr.get("failure_say") or "say you could not record it.")) +
+        f"{n + 1}. After create_promise, read the what_to_do_next line of the tool result and do exactly that. Say that the promise is recorded ONLY when the result says ok; until then never use the word 'recorded' at all, not even 'not recorded'. If it failed: " + (f"try once more; if it fails again, {cr.get('failure_say') or 'say you could not record it'}." if cr.get("retry_on_failure", 1) else (cr.get("failure_say") or "say you could not record it.")) +
         (" After a recorded promise say exactly: \"" + cr["recorded_say"] + "\"" if cr.get("recorded_say") else ""),
     ]
     n += 2
@@ -398,8 +398,9 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         task = "\n".join(x for x in [
             f"Security question {i + 1} of {len(qs)}: {q.get('ask', '')}",
             f"When the customer answers, call verify_identity with the answer formatted as: {q.get('answer_format', '')}. {q.get('notes', '')}".strip(),
-            "If the customer gives only part of the answer (half a number, a date without a year), ask for the rest before calling the tool.",
+            "If the answer is complete (for a date: day, month and year; for digits: all the digits asked for), call the tool at once, even if the customer's sentence trailed off or added other words. Only if a piece is missing (half a number, a date without a year), ask for the missing piece first.",
             "Then follow the what_to_do_next line of the tool result exactly. Ask only this question; never ask any other security question or invent one.",
+            "EVERY answer the customer gives to this question must be sent to verify_identity, including a repeated or corrected answer. Never judge an answer yourself and never skip the tool call.",
             f"A wrong answer may be asked again. {idn.get('max_wrong_total', 3)} wrong answers in total end the check; the tool result tells you how many are left.",
             decline_rule,
             "Do not say why you are calling and do not mention any account, product or amount. If asked, say you can explain after the security check.",
@@ -469,9 +470,9 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         "                d2 = result.setdefault('data', dict()) if isinstance(result.get('data'), dict) else None\n"
         "                result['what_to_do_next'] = 'NOT recorded: unknown product_id. Use the exact product id from the facts (p1, p2, ...) and call create_promise again.'\n"
         "            elif n < 2:\n"
-        "                result['what_to_do_next'] = 'The promise was NOT saved (' + err + '). Do NOT say it is recorded or saved. Tell the customer there was a technical problem and you will try once more, then call create_promise again with the same values.'\n"
+        "                result['what_to_do_next'] = 'The promise was NOT saved (' + err + '). Do not use the word recorded at all in your reply (not even not recorded). Say only that there was a technical problem and that you will try once more, then call create_promise again with the same values.'\n"
         "            else:\n"
-        "                result['what_to_do_next'] = 'The promise was NOT saved again (' + err + '). Do NOT say it is recorded or saved. Tell the customer you could not record the promise" + (" and that the product is noted as service_error" if mp.get("enabled") else "") + ", thank them, say goodbye and call transition_to_finalize.'\n"
+        "                result['what_to_do_next'] = 'The promise was NOT saved again (' + err + '). Do not use the word recorded in your reply. Tell the customer you could not save the promise" + (" and that the product is noted as service_error" if mp.get("enabled") else "") + ", thank them, say goodbye and call transition_to_finalize.'\n"
         "            if isinstance(d, dict):\n"
         "                d['what_to_do_next'] = result['what_to_do_next']\n"
         "except Exception:\n"

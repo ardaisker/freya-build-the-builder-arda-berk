@@ -37,7 +37,12 @@ try:
         lines.append('Today is NOT a business day. The first allowed payment day is ' + fmt(next_business(today)) + '.')
     for f in pf:
         dl = datetime.date.fromisoformat(f['deadline'])
-        lines.append('PRODUCT ' + f['product_id'] + ': ' + f['label'] + '. Past due ' + money(f['past_due']) + ', ' + str(f['days_late']) + ' days late, band "' + f['band'] + '". LATEST PAYMENT DATE (deadline) ' + fmt(dl) + '. FLOOR (lowest amount you may accept) ' + money(f['floor']) + '. Persuasion attempts allowed: ' + str(f['attempts']) + '.')
+        plan = 'ATTEMPT PLAN for ' + f['product_id'] + ': attempt 1 = ' + money(f['past_due']) + ' (or the floor ' + money(f['floor']) + ' if the full amount was too much) on ' + fmt(att1) + '.'
+        if f['attempts'] >= 2:
+            plan += ' Attempt 2 = the floor ' + money(f['floor']) + ' on ' + fmt(dl) + '. After attempt 2 is refused: stop asking about this product.'
+        else:
+            plan += ' NO attempt 2 for this product: after attempt 1 is refused, stop asking about it at once.'
+        lines.append('PRODUCT ' + f['product_id'] + ': ' + f['label'] + '. Past due ' + money(f['past_due']) + ', ' + str(f['days_late']) + ' days late, band "' + f['band'] + '". LATEST PAYMENT DATE (deadline) ' + fmt(dl) + '. FLOOR (lowest amount you may accept) ' + money(f['floor']) + '. Persuasion attempts allowed: ' + str(f['attempts']) + '. ' + plan)
     if len(pf) > 1:
         lines.append('There are ' + str(len(pf)) + ' late products, in this order: ' + ', '.join([f['product_id'] + ' ' + f['label'] for f in pf]) + '.')
     vars['facts'] = '\n'.join(lines)
