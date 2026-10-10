@@ -318,7 +318,13 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
     opening_text = (first + " " + q).strip() if q not in first else first
     looks_like_instruction = bool(re.match(r"^(say|tell|state|mention|introduce|do not|don't|never|the agent)\b", first.lower())) or "say nothing" in first.lower() or not first
     if looks_like_instruction:
-        on_enter = {"type": "llm", "prompt": "Open the call now in one or two short sentences. " + (first or "Say who you are and where you call from.") + " Then ask exactly: " + q + " Say nothing about the purpose of the call. Do not call a tool."}
+        # the spec carried an instruction, not the words: build the spoken line from the spec's own names
+        who = (spec.get("agent_self_name") or "digital assistant").strip()
+        bank = (spec.get("bank_name") or "the bank").strip()
+        line = f"Hello, this is the {who} calling from {bank}."
+        if "record" in first.lower():
+            line += " We record this call."
+        on_enter = {"type": "tts", "text": line + " " + q}
     else:
         on_enter = {"type": "tts", "text": opening_text}
     nodes["opening"] = {
