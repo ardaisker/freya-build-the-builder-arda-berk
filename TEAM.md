@@ -9,6 +9,10 @@ Durum ve sahipler burada. Her commit'te güncellenir. Sunucuda: `cd /root/hackat
   Brief A: v10/v14/**v19 10/10 iki tekrarda** (v19 = güncel: sabit TTS açılış, sessiz tekrar, tek/çok ürün ayrımı); stiller (v10/v11): in_words 10, corrects 9, asks_back 9, pieces 9, talkative 9 (v11). Brief B (A+B spec): v8/**v17 3/3 iki tekrarda**; A-spec ajanı B müşterilerinde de 3/3. Kit örneği: düz 10/10, talkative 7/10. **Dikkat (Cmt 17:00-18:00):** platform modeli yoğunken ajan ilk cümleyi söyleyemiyor, müşteri 80 s sonra kapatıyor → 0/10 görünen koşular platform kaynaklı; `slowest agent turn` uyarısına bak, koşuyu tekrarla. Tam build.py provası: sıfırdan 10/10, 186 s. Agent id'ler `out/compiled/*.ids.json`.
 - Kod düğümleri birim testli: `pytest tests/` (takvim, deadline, tarih sözcükleri, geri arama penceresi, outcome seçimi).
 
+## Uç durum seti (Cmt akşam)
+- `fixtures/edge-cases.json`: 37 senaryo, 13 müşteri üzerinde (mock özel müşteri kabul etmiyor). Koşturma: `python3 builder/run_custom.py <agent_id> [--only E01,E02] [--reps 2] [--style ...]`.
+- Sonuçlar: A v20 20/27 → A v21 25/27 → **A+B v21 27/27**; 2. parti (E28-E37) ölçülüyor. Regresyon kapısı A v21: 10/10 × 2.
+
 ## Sahipler
 - Arda: builder kodu (`builder/`), final koşular (Mac, Claude Max login).
 - Berk (sunucu): ölçüm koşuları ve hata analizi. LLM gerekmez; `env.sh` yeter.
