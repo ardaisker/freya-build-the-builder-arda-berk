@@ -139,3 +139,23 @@ def test_large_data_files_are_abridged_for_the_model():
     assert len(out) < 90_000 and "abridged" in out and '"description": "made up"' in out
     cut = json.loads(out.split("\n", 1)[1])
     assert cut["rows"][0] == rows[0] and cut["rows"][1] == rows[1] and "more entries" in str(cut["rows"][-1])      # the first rows whole, the tail left out
+
+
+def test_spoken_amounts_digits_and_lists():
+    e = env(cc.RESULT_LIB)
+    d = {"a": 2500.0, "b": 7666.5, "c": 1234567.89, "tail": "1003", "x": {"owes": 0}, "y": {"owes": 5}, "z": {"owes": 0}}
+    e["derive"]([{"name": "a", "op": "amount_text", "a": "a", "unit": "krone", "subunit": "ore", "thousands": "."},
+                 {"name": "b", "op": "amount_text", "a": "b", "unit": "krone", "subunit": "ore", "thousands": "."},
+                 {"name": "c", "op": "amount_text", "a": "c", "unit": "krone", "subunit": "ore", "thousands": "."},
+                 {"name": "tail", "op": "spell_digits", "a": "tail", "names": ["nul", "en", "to", "tre", "fire", "fem", "seks", "syv", "otte", "ni"]},
+                 {"name": "clear", "op": "join_if", "sep": ", ", "last_sep": " og ", "items": [{"when": [{"path": "x.owes", "op": "le", "value": 0}], "text": "X"}, {"when": [{"path": "y.owes", "op": "le", "value": 0}], "text": "Y"},
+                                                                                             {"when": [{"path": "z.owes", "op": "le", "value": 0}], "text": "Z"}, {"when": [{"path": "w", "op": "present"}, {"path": "w.owes", "op": "le", "value": 0}], "text": "W"}]},
+                 {"name": "case", "op": "first_of", "default": "none", "items": [{"when": [{"path": "y.owes", "op": "gt", "value": 9}], "text": "big"}, {"when": [{"path": "y.owes", "op": "gt", "value": 0}], "text": "small [[y.owes]]"}]}], d, None)
+    assert d["computed"] == {"a": "2.500 krone", "b": "7.666 krone 50 ore", "c": "1.234.567 krone 89 ore", "tail": "en nul nul tre", "clear": "X og Z", "case": "small 5"}
+
+
+def test_a_masked_value_is_matched_position_by_position():
+    e = env(cc.ROUTE_LIB)
+    cands = ["AB0000******4253", "AB0010******4253"]
+    assert e["snap"]("AB00101234564253", cands) == "AB0010******4253"
+    assert e["snap"]("AB00 0000 0000 4253", cands) == "AB0000******4253"

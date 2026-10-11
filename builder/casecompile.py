@@ -66,6 +66,9 @@ def snap(value, candidates):
     v = str(value)
     if v in c or not c:
         return value
+    masked = [x for x in c if len(x) == len(_digits(v)) and all([(a == b) or not re.match(r'[0-9A-Za-z]', a) for a, b in zip(x, _digits(v))])]
+    if len(masked) == 1:
+        return masked[0]
     same = [x for x in c if _digits(x) == _digits(v)]
     if len(same) == 1:
         return same[0]
@@ -204,6 +207,9 @@ def _status_ok(want, sc):
             return True
     return False
 
+def _fill(text, d):
+    return re.sub(r'\[\[([^\]]+)\]\]', lambda m: str(_get(d, m.group(1).strip())), str(text or ''))
+
 def _date(v):
     m = re.match(r'(\d\d\d\d)-(\d\d)-(\d\d)', str(v or '').strip())
     if m:
@@ -248,6 +254,35 @@ def _derive_one(d, r, today):
         if r.get('trim') and round(x, places) == int(round(x, places)):
             places = 0
         return _fmt_num(x, str(r.get('decimal', '.')), str(r.get('thousands', ',')), places)
+    if op == 'amount_text':
+        # an amount the way it is read aloud: whole part with its unit, then the hundredths with theirs, zero hundredths left out
+        x = _num(a)
+        if x is None:
+            return None
+        cents = int(round(abs(x) * 100))
+        out = ('-' if x < 0 else '') + _fmt_num(cents // 100, '', str(r.get('thousands', '')), 0) + ' ' + str(r.get('unit') or '')
+        if cents % 100 and r.get('subunit'):
+            out += ' ' + str(cents % 100) + ' ' + str(r.get('subunit'))
+        elif cents % 100:
+            out = ('-' if x < 0 else '') + _fmt_num(cents / 100.0, str(r.get('decimal', ',')), str(r.get('thousands', '')), 2) + ' ' + str(r.get('unit') or '')
+        return out.strip()
+    if op == 'spell_digits':
+        names = r.get('names') or []
+        return ' '.join([(str(names[int(ch)]) if len(names) == 10 else ch) for ch in str(a if a is not None else '') if ch.isdigit()])
+    if op == 'join_if':
+        # the labels whose conditions hold, joined the way a list is spoken
+        labels = [str(it.get('text')) for it in (r.get('items') or []) if isinstance(it, dict) and all([_test(d, c) for c in (it.get('when') or [])])]
+        if not labels:
+            return ''
+        if len(labels) == 1:
+            return labels[0]
+        return str(r.get('sep', ', ')).join(labels[:-1]) + str(r.get('last_sep', ' and ')) + labels[-1]
+    if op == 'first_of':
+        # the first text whose conditions hold: a label picked by code
+        for it in (r.get('items') or []):
+            if isinstance(it, dict) and all([_test(d, c) for c in (it.get('when') or [])]):
+                return _fill(it.get('text'), d)
+        return str(r.get('default') or '')
     if op == 'last_chars':
         return str(a if a is not None else '')[-int(_num(b) or 4):]
     if op == 'count':
@@ -293,9 +328,6 @@ def derive(rules, d, today):
                 c[name] = _derive_one(d, r, today)
         except Exception:
             continue
-
-def _fill(text, d):
-    return re.sub(r'\[\[([^\]]+)\]\]', lambda m: str(_get(d, m.group(1).strip())), str(text or ''))
 
 def guidance(rules, sc, d, ok_text, err_text):
     """(what the agent is told to do next, the ending this result alone decides or '', the sentence spoken at that ending or '')."""
