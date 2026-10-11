@@ -103,6 +103,9 @@ def narrow(chosen, said, records, vf, lf):
     if len(recs) < 2:
         return 'ok', recs
     sd = re.sub(r'[^0-9]', '', str(said or ''))
+    longest = max([len(str(r.get(vf))) for r in recs])
+    if len(sd) > longest:
+        sd = sd[len(sd) - longest:]          # several answers were joined: the last complete one counts
     def label(r):
         return str(r.get(lf) or '').strip().lower()
     def fits(r):
@@ -174,7 +177,7 @@ try:
     for name, said_key, tool, lst, vf, lf, steps, none_text in APART:
         try:
             said = b.pop(said_key, '')
-            if _unset(b.get(name)) or int(vars.get(TOOL + '_blocks') or 0) >= 4:
+            if _unset(b.get(name)):
                 continue
             records = collect(json.loads(vars.get(tool + '_json') or 'null'), lst + '.*')
             state, m = narrow(b.get(name), said, records, vf, lf)
@@ -578,7 +581,7 @@ def case_tool(t, base_url, call_vars, timeout_ms=25000, endings=None, by_name=No
         r_route, r_props, _ = tool_params(repeat, call_vars)
         rep = {"method": str(repeat.get("method") or "POST").upper(), "url": base_url.rstrip("/") + "/" + str(repeat.get("path") or "").lstrip("/"), "params": r_route,
                "values": [[k, ("var:" + str(leaf.get("default")).strip("{} ")) if str(leaf.get("default")).startswith("{{") else ("lit:" + str(leaf.get("default")))] for k, leaf in r_props.items()]}
-        props["digits_said"] = {"type": "string", "default": "{{digits_said}}", "description": "Every digit the caller has said so far to identify it, as digits only and in the order said (for example the last four, the last six or the whole number). Empty if the caller only said a name."}
+        props["digits_said"] = {"type": "string", "default": "{{digits_said}}", "description": "The digits of the caller's LATEST answer that identify it, as digits only (the last four, the last six or the whole number, whichever they just said). Do not join it with earlier answers. Empty if the caller only said a name."}
     tool = {
         "type": "function",
         "config": {"timeoutMs": int(max(3, min(28, float(t.get("timeout_seconds") or timeout_ms / 1000))) * 1000), "maxRetries": int(max(0, min(2, int(t.get("retries") or 0))))},
