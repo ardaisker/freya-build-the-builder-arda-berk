@@ -403,3 +403,11 @@ def test_counts_come_from_the_spec():
     assert "for the FIRST time" in wf and "SECOND real refusal" not in wf and "These questions protect your account" not in wf
     assert "after the third ask" in wf and "after three asks" in wf
     assert "fails three times" in wf
+
+
+def test_weekday_with_day_number_picks_the_matching_month():
+    v = facts([{"product_id": "p1", "type": "car_loan", "past_due": 1250, "days_late": 14, "instalment_amount": 400}], now="2026-10-22T11:00")
+    for text, want, status in (("Monday the 19th", "2026-10-19", "past"), ("Friday the 23rd", "2026-10-23", "ok"), ("Monday the 26th", "2026-10-26", "not_business")):
+        v["customer_date_text"] = text
+        run("resolve_date", v)
+        assert (v["resolved_date"], v["date_status"]) == (want, status), (text, v["resolved_date"], v["date_status"])

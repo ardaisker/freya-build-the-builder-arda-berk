@@ -192,6 +192,21 @@ def parse_day_text(text, today):
                 if cand_d >= today:
                     d = cand_d
                     break
+            if wd is not None and (d is None or d.weekday() != wd):
+                # 'Monday the 19th': the weekday picks the month; a past match in this month is a past day
+                match = None
+                for k in range(-1, 3):
+                    mo = today.month + k
+                    yy = y + (mo - 1) // 12
+                    mo = (mo - 1) % 12 + 1
+                    try:
+                        cand_d = datetime.date(yy, mo, day)
+                    except Exception:
+                        continue
+                    if cand_d.weekday() == wd and (match is None or abs((cand_d - today).days) < abs((match - today).days)):
+                        match = cand_d
+                if match is not None:
+                    d = match
             if d is None:
                 return None, 'unknown'
             return d, 'ok'
