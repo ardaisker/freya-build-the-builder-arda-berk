@@ -104,8 +104,22 @@ def narrow(chosen, said, records, vf, lf):
         return 'ok', recs
     sd = re.sub(r'[^0-9]', '', str(said or ''))
     longest = max([len(str(r.get(vf))) for r in recs])
-    if len(sd) > longest:
-        sd = sd[len(sd) - longest:]          # several answers were joined: the last complete one counts
+    def ends(r):
+        v = str(r.get(vf))
+        head = re.match(r'[0-9A-Za-z]*', v).group(0)
+        tail = re.search(r'[0-9A-Za-z]*$', v).group(0)
+        return head, tail
+    if len(sd) >= longest:
+        # a whole number was said (a phone model may drop or double a digit when writing it down, or join earlier
+        # answers in front): the record whose visible beginning and visible end both occur, in that order, is meant
+        whole = []
+        for r in recs:
+            head, tail = ends(r)
+            if tail and sd.endswith(tail) and (not head or head in sd[:len(sd) - len(tail)]):
+                whole.append(r)
+        if len(whole) == 1:
+            return 'one', whole
+        sd = sd[len(sd) - longest:]
     def label(r):
         return str(r.get(lf) or '').strip().lower()
     def fits(r):
