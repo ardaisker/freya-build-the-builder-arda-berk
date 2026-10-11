@@ -189,3 +189,34 @@ def test_edits_change_only_what_they_name():
     assert out["rules"][-1] == "one more" and [p["title"] for p in out["procedure"]] == ["Find the parcel", "Between", "Second attempt"]
     assert [e["id"] for e in out["endings"]] == ["finished"] and out["procedure"][0]["do"] == "changed" and out["nowhere"] == {"deep": {"thing": 1}}
     assert spec == SPEC and out["tools"][0] == SPEC["tools"][0]          # the original is untouched, the rest unchanged
+
+
+def test_duplicates_in_a_list_are_counted_by_code():
+    e = env(cc.RESULT_LIB)
+    d = {"items": [{"kind": "A", "tail": "11"}, {"kind": "A", "tail": "11"}, {"kind": "a ", "tail": "22"}, {"kind": "B", "tail": "22"}]}
+    e["derive"]([{"name": "same_kind", "op": "count_same", "each": "items", "a": "kind"}, {"name": "same_both", "op": "count_same", "each": "items", "a": ["kind", "tail"]},
+                 {"name": "how", "op": "first_of", "each": "items", "default": "ask more", "items": [{"when": [{"path": "computed.same_kind", "op": "eq", "value": 1}], "text": "take it"}, {"when": [{"path": "computed.same_both", "op": "eq", "value": 1}], "text": "ask tail"}]}], d, None)
+    assert [(i["computed"]["same_kind"], i["computed"]["same_both"], i["computed"]["how"]) for i in d["items"]] == [(3, 2, "ask more"), (3, 2, "ask more"), (3, 1, "ask tail"), (1, 1, "take it")]
+    e["derive"]([{"name": "guide", "op": "lines", "a": "items", "template": "[[kind]]/[[tail]]: [[computed.how]]", "sep": "; "}], d, None)
+    assert d["computed"]["guide"] == "A/11: ask more; A/11: ask more; a /22: ask tail; B/22: take it"
+
+
+def test_error_answers_are_routed_by_the_engine_and_named_in_the_prompt():
+    spec = json.loads(json.dumps(SPEC))
+    spec["tools"][0]["result_rules"] = [{"status": 404, "when": [{"path": "code", "op": "eq", "value": "NONE_3"}], "go": "to_person", "say": "No member on file."}, {"status": "error", "go": "finished", "say": "Technical problem."}, {"status": "ok", "then": "fine"}]
+    spec["tools"][1]["result_rules"] = [{"status": 404, "when": [{"path": "code", "op": "eq", "value": "GONE_7"}], "then": "Say the parcel is gone."}, {"status": [404, 410], "then": "Ask for the number again."},
+                                        {"status": "error", "go": "to_person"}, {"status": "ok", "then": "fine"}]
+    wf = cc.compile_case(spec, "https://x.test")
+    assert lint(wf) == []
+    f = [t for t in wf["nodes"]["fetch_get_member"]["transitions"] if t["target_node"].startswith("err_")]
+    assert [t["target_node"] for t in f] == ["err_get_member_0", "err_get_member_1"]          # one transition per rule, in rule order
+    assert f[0]["condition"]["conditions"] == [{"logic": "and", "conditions": [{"variable": "fetch_get_member_status_code", "operator": "equals", "operand": "404"}, {"variable": "fetch_get_member_response.message", "operator": "contains", "operand": "NONE_3"}]}]
+    assert f[1]["condition"]["conditions"] == [{"logic": "and", "conditions": [{"variable": "fetch_get_member_response.status", "operator": "equals", "operand": "error"}]}]
+    assert wf["nodes"]["fetch_get_member"]["transitions"][-1]["condition"] == {"operator": "always"}
+    assert wf["nodes"]["err_get_member_0"]["terminal"]["function"]["parameters"]["properties"]["spoken_message"]["default"] == "No member on file."
+    m = wf["nodes"]["main"]
+    e = [t for t in m["transitions"] if t["target_node"].startswith("err_get_parcel")]
+    assert len(e) == 1 and e[0]["condition"]["conditions"][0]["conditions"] == [{"variable": "get_parcel_response.status", "operator": "equals", "operand": "error"},
+                                                                                  {"variable": "get_parcel_status_code", "operator": "not_equals", "operand": "404"}, {"variable": "get_parcel_status_code", "operator": "not_equals", "operand": "410"}]
+    assert wf["nodes"][e[0]["target_node"]]["terminal"]["function"]["parameters"]["properties"]["spoken_message"]["default"] == "I am handing you over to a colleague now."
+    assert "IF A SERVICE CALL FAILS" in m["task_message"] and "get_parcel fails with status 404 and the answer contains GONE_7: Say the parcel is gone." in m["task_message"] and "Ask for the number again." in m["task_message"]
