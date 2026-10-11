@@ -586,11 +586,12 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         "        d = result.get('data')\n"
         "        pid = ''\n"
         "        try:\n"
-        "            pid = str((config or dict()).get('body', dict()).get('" + P.get("product_id", "product_id") + "', ''))\n"
+        "            pid = str(vars.get('last_promise_pid') or '')\n"
         "        except Exception:\n"
         "            pid = ''\n"
         "        if isinstance(d, dict) and d.get('" + OK + "') in (True, 'true', 'True'):\n"
         "            vars['promises_log'] = str(vars.get('promises_log') or '') + pid + ';'\n"
+        "            vars['promised_' + ''.join([ch if ch.isalnum() else '_' for ch in pid])] = '1'\n"
         "            vars['call_outcome'] = '" + A["promise_outcome"] + "'\n"
         "            vars['call_reason'] = ''\n"
         "            d['what_to_do_next'] = 'The promise is recorded. Tell the customer it is recorded" + (" and say exactly: " + recorded_say if recorded_say else "") + ". Then continue with the next product if any; otherwise stop and wait for the customer to reply (do not say goodbye yet). In your NEXT message, answer anything they ask, then thank them, say goodbye and call transition_to_finalize.'\n"
@@ -624,7 +625,9 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
     )
     promise_tool = tool_json(T["create_promise"], cust("create_promise"),
                              "Record one payment promise. CALL it only after the customer said a clear yes to the read-back of product, amount and date, once per product. Then follow what_to_do_next in the result.",
-                             hooks={"post_process_code": post_promise}, max_retries=int(cr.get("retry_on_failure", 1) or 0))
+                             hooks={"post_process_code": post_promise,
+                                    # the post-hook cannot see the request, so the product is remembered here
+                                    "pre_process_code": "try:\n    pid = str((config or dict()).get('body', dict()).get('" + P.get("product_id", "product_id") + "', ''))\n    vars['last_promise_pid'] = pid\n    vars['tried_' + ''.join([ch if ch.isalnum() else '_' for ch in pid])] = '1'\nexcept Exception:\n    pass\n"}, max_retries=int(cr.get("retry_on_failure", 1) or 0))
     queue_outcomes = {}
     note_outcomes = {}
     for c in spec.get("special_cases") or []:
@@ -646,7 +649,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         tools.append(tool_json(T["add_note"], cust("add_note"),
                                "Record why one product ends without a promise. CALL it once per product without a promise, with the reason the rules name. Never after a transfer.",
                                model_fields=[N.get("product_id", "product_id"), N.get("reason", "reason")],
-                               hooks={"pre_process_code": "try:\n    b = (config or dict()).get('body', dict())\n    vars['notes_log'] = str(vars.get('notes_log') or '') + str(b.get('" + N.get("product_id", "product_id") + "', '')) + ':' + str(b.get('" + N.get("reason", "reason") + "', '')) + ';'\n    if not str(vars.get('promises_log') or ''):\n        nm = " + json.dumps(note_outcomes) + "\n        o = nm.get(str(b.get('" + N.get("reason", "reason") + "', '')))\n        if o:\n            vars['call_outcome'] = o[0]\n            vars['call_reason'] = o[1]\nexcept Exception:\n    pass\n",
+                               hooks={"pre_process_code": "try:\n    b = (config or dict()).get('body', dict())\n    vars['notes_log'] = str(vars.get('notes_log') or '') + str(b.get('" + N.get("product_id", "product_id") + "', '')) + ':' + str(b.get('" + N.get("reason", "reason") + "', '')) + ';'\n    vars['noted_' + ''.join([ch if ch.isalnum() else '_' for ch in str(b.get('" + N.get("product_id", "product_id") + "', ''))])] = '1'\n    if not str(vars.get('promises_log') or ''):\n        nm = " + json.dumps(note_outcomes) + "\n        o = nm.get(str(b.get('" + N.get("reason", "reason") + "', '')))\n        if o:\n            vars['call_outcome'] = o[0]\n            vars['call_reason'] = o[1]\nexcept Exception:\n    pass\n",
                                       "post_process_code": "try:\n    if isinstance(result, dict):\n        result.pop('header', None)\n        d = result.get('data')\n        if isinstance(d, dict):\n            if d.get('" + OK + "') in (True, 'true', 'True'):\n                d['what_to_do_next'] = 'Noted. Continue with the next product, or if all products are handled, thank the customer, say goodbye and call transition_to_finalize.'\n            else:\n                d['what_to_do_next'] = 'The note was NOT saved (' + str(d.get('" + ERR + "') or 'error') + '). Call add_note again with the product_id and one of the allowed reasons.'\nexcept Exception:\n    pass\n"}))
     def negotiate_set(suffix, with_notes):
         name = "negotiate" + suffix
@@ -717,8 +720,11 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         ex = oc((spec.get("persuasion") or {}).get("exhausted_outcome"))
         left = [r for r in reasons if r not in claimed]
         bn_default = ex[1] if ex[1] in reasons else (left[0] if len(left) == 1 else ("refused" if "refused" in reasons else (left[0] if left else "")))
+        by_name = {c.get("name"): c for c in spec.get("special_cases") or [] if isinstance(c, dict)}
+        bn_flags = [[flag + "_flag", flag, str((by_name.get(cn) or {}).get("note_reason"))] for flag, cn in (("paid", "already_paid"), ("dispute", "dispute"), ("hardship", "hardship"))
+                    if str((by_name.get(cn) or {}).get("note_reason") or "") in reasons]
         if bn_default:
-            nodes["notes_backstop"] = code_node("notes_backstop", snippet("notes_backstop", libs=LIBS, SPEC=spec, BN_MAP=bn_map, BN_DEFAULT=bn_default), "end_main",
+            nodes["notes_backstop"] = code_node("notes_backstop", snippet("notes_backstop", libs=LIBS, SPEC=spec, BN_MAP=bn_map, BN_DEFAULT=bn_default, BN_FLAGS=bn_flags), "end_main",
                                                 [tr("backstop_note", "a product has neither a promise nor a note", cond_eq("bn_go", "1"))])
             nodes["backstop_note"] = api_node("backstop_note", tool_json(T["add_note"], {**cust("add_note"), N.get("product_id", "product_id"): "{{bn_product}}", N.get("reason", "reason"): "{{bn_reason}}"}, "Note a product that ended without a promise.", model_fields=[]), "notes_backstop")
             after_finalize = "notes_backstop"

@@ -300,6 +300,9 @@ def test_callback_in_two_parts_and_next_week_weekday():
     w["customer_date_text"] = "next week, on Thursday"
     run("resolve_date", w)
     assert w["resolved_date"] == "2026-10-22"
+    w["customer_date_text"] = "next week Wednesday, sorry, I mean Thursday"
+    run("resolve_date", w)
+    assert w["resolved_date"] == "2026-10-22"
 
 
 def test_notes_backstop_fills_missing_note():
@@ -309,7 +312,7 @@ def test_notes_backstop_fills_missing_note():
     assert wf["nodes"]["finalize"]["passthrough_default_transition"] == "notes_backstop"
     code = wf["nodes"]["notes_backstop"]["pre_actions"][0]["function"]["parameters"]["properties"]["code"]["default"]
     pf = json.dumps([{"product_id": "p1"}, {"product_id": "p2"}])
-    v = {"pf_json": pf, "promises_log": "p2;", "notes_log": "", "create_promise_success_count": "1", "call_outcome": "promise", "call_reason": ""}
+    v = {"pf_json": pf, "promises_log": ";", "tried_p2": "1", "notes_log": "", "create_promise_success_count": "1", "call_outcome": "promise", "call_reason": ""}
     exec(code, {"vars": v})
     assert v["bn_go"] == "1" and v["bn_product"] == "p1" and v["bn_reason"] == "refused"
     exec(code, {"vars": v})
@@ -320,3 +323,12 @@ def test_notes_backstop_fills_missing_note():
     v = {"pf_json": pf, "promises_log": "", "notes_log": "", "call_outcome": "paid", "call_reason": ""}
     exec(code, {"vars": v})
     assert v["bn_go"] == "1" and v["bn_reason"] == "paid"
+    v = {"pf_json": pf, "promises_log": "", "notes_log": "p2:paid;", "noted_p1": "1", "noted_p2": "1", "call_outcome": "paid"}
+    exec(code, {"vars": v})
+    assert v["bn_go"] == "0"                                  # parallel notes: the log lost p1, the marker did not
+    v = {"pf_json": pf, "promises_log": ";;", "tried_p1": "1", "tried_p2": "1", "create_promise_success_count": "2", "call_outcome": "promise"}
+    exec(code, {"vars": v})
+    assert v["bn_go"] == "0"
+    v = {"pf_json": pf, "promises_log": ";", "tried_p1": "1", "paid_flag": "paid", "call_outcome": "promise"}
+    exec(code, {"vars": v})
+    assert v["bn_go"] == "1" and v["bn_product"] == "p2" and v["bn_reason"] == "paid"   # one claim, one leftover product
