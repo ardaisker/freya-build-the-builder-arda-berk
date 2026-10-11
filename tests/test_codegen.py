@@ -411,3 +411,52 @@ def test_weekday_with_day_number_picks_the_matching_month():
         v["customer_date_text"] = text
         run("resolve_date", v)
         assert (v["resolved_date"], v["date_status"]) == (want, status), (text, v["resolved_date"], v["date_status"])
+
+
+def test_floor_combinations_band_full_and_month_end():
+    import copy
+    global SPEC
+    keep = SPEC
+    try:
+        SPEC = copy.deepcopy(keep)
+        SPEC["amounts"].update({"floor_by_type": {}, "floor_percent_of_past_due": 15, "floor_fixed_amount": 50})
+        SPEC["bands"] = [{"name": "S1", "days_late_min": 1, "days_late_max": 10, "deadline_rule": {"type": "end_of_month", "if_today_use_next_month": True}, "persuasion_attempts": 1},
+                         {"name": "S4", "days_late_min": 61, "days_late_max": 90, "deadline_rule": {"type": "today"}, "persuasion_attempts": 0, "floor": "full"}]
+        pf = lambda pd, dl, now=NOW: json.loads(facts([{"product_id": "p1", "type": "car_loan", "past_due": pd, "days_late": dl}], now=now)["pf_json"])[0]
+        assert pf(200, 5)["floor"] == 50            # 15% = 30 < 50: the higher one
+        assert pf(1000, 5)["floor"] == 150          # 15% = 150 > 50
+        assert pf(40, 5)["floor"] == 40             # never above the past-due amount
+        assert pf(1000, 70)["floor"] == 1000        # the band accepts only the full amount
+        SPEC["amounts"]["floor_combine"] = "min"
+        assert pf(200, 5)["floor"] == 30
+        assert pf(200, 5)["deadline"] == "2026-10-30"                                  # last business day of October
+        assert pf(200, 5, now="2026-10-30T10:00")["deadline"] == "2026-11-30"          # today is that day: next month
+    finally:
+        SPEC = keep
+
+
+def test_last_weekday_is_in_the_past():
+    v = facts([{"product_id": "p1", "type": "car_loan", "past_due": 1250, "days_late": 14, "instalment_amount": 400}], now="2026-10-22T11:00")
+    v["customer_date_text"] = "last Friday"
+    run("resolve_date", v)
+    assert (v["resolved_date"], v["date_status"]) == ("2026-10-16", "past")
+
+
+def test_validate_reads_the_outcome_property_from_the_api_map():
+    from extract import validate
+    spec = json.load(open(ROOT / "fixtures" / "rehearsal-biz.spec.json")) if (ROOT / "fixtures" / "rehearsal-biz.spec.json").exists() else None
+    if spec is None:
+        return
+    api = json.load(open(ROOT / "fixtures" / "rehearsal-biz.openapi.json"))
+    assert not [p for p in validate(spec, api) if "not in API enum" in p]
+
+
+def test_offsets_named_days_and_coming_weekday():
+    # 2026-10-14 is a Wednesday. An offset is counted from today, never read as a day of the month.
+    v = facts([{"product_id": "p1", "type": "car_loan", "past_due": 1250, "days_late": 14, "instalment_amount": 400}])
+    for text, day, status in [("in two weeks", "2026-10-28", "ok"), ("in 3 days", "2026-10-17", "ok"), ("a week from today", "2026-10-21", "ok"),
+                              ("two days from now", "2026-10-16", "ok"), ("in ten days", "2026-10-24", "ok"), ("this coming Monday", "2026-10-19", "ok"),
+                              ("Christmas Eve", "2026-12-24", "ok"), ("new year's eve", "2026-12-31", "ok")]:
+        w = dict(v, customer_date_text=text)
+        run("resolve_date", w)
+        assert w["resolved_date"] == day, (text, w["resolved_date"])

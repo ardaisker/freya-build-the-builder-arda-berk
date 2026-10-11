@@ -68,9 +68,15 @@ def validate(spec: dict, openapi: dict) -> list[str]:
             if "enum" in prop:
                 enums[(path.strip("/"), name)] = set(prop["enum"])
     outcomes = set()
-    for (t, n), vals in enums.items():      # the close_call property with the most enum values is the outcome
-        if t == "close_call" and len(vals) > len(outcomes):
-            outcomes = vals
+    try:                                    # the outcome property as the API map resolves it (model section, then name patterns)
+        import apimap
+        outcomes = set(apimap.resolve(spec, openapi)["outcomes"])
+    except Exception:
+        pass
+    if not outcomes:
+        for (t, n), vals in enums.items():  # fallback: the close_call property with the most enum values
+            if t == "close_call" and len(vals) > len(outcomes):
+                outcomes = vals
     id_fields = next((vals for (t, n), vals in enums.items() if t == "verify_identity"), None)
 
     def check_outcome(o, where):
