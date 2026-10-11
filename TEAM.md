@@ -43,3 +43,11 @@ Gizli brief'lerde alan adları, değerler ve kurallar değişecek; builder artı
 - Anahtarlar `env.sh`'de, asla commit edilmez, asla yazdırılmaz.
 - Gizli brief'lerden (Paz 20:00) koda/prompt'a hiçbir kural, değer, isim girmez.
 - Workflow limiti: slot ile yerinde güncelleme (`save_workflow(slot)`); yeni slot açma.
+
+## 11 Eki 18:40: iki dal birleştirildi (main = 80a210a ve sonrası)
+
+- `main` artık hem Arda tarafındaki işleri (güvenlik katmanı, söz engeli, not yedeği, kuralı sözle bırakma, sözleri birlikte kaydetme, bağlantı kopmasına karşı yeniden deneme) hem de `berk/robust-build` dalının 5dff887'ye kadarki dört commit'ini içeriyor (oracle adımı, taban ve ay sonu kural biçimleri, tarih düzeltmeleri, FREYA_PERSONAS_FILE).
+- Birleştirme sonrası: 27 test geçiyor; kod adımı çıktıları 4 spec x 55 müşteri x 4 gün x 15 gün ifadesinde aynı, yalnız iki tarih düzeltmesi fark yaratıyor ("in two weeks", gün numaralı hafta günü). Birleşik builder A+B'de 197 sn, oracle 22/22.
+- Berk'in henüz commit edilmemiş işi (`builder/fallback.py`, `fixtures/stress-*.md`) main'de YOK. Girecekse: `git fetch origin && git merge origin/main` (ya da rebase), testler, push; en geç 19:30.
+- Gizli brief'lerde builder TEK yerden koşacak (Arda'nın makinesi, `main`), tek iz dosyasıyla.
+- Çakışma noktası olursa: `calendar_lib.floor_text(p, band)` hesaplanabilir her taban biçiminde boş dönmeli; yeni bir hesaplanabilir biçim eklenirse oraya da eklenmeli.
