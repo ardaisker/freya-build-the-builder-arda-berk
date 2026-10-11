@@ -608,11 +608,15 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
             ],
         }
     # the right person is on the line: from here an abandoned call is a declined check, no longer "not reached"
-    nodes["mark_reached"] = set_node("mark_reached", decl_o[0], decl_o[1], "identity_q1" if qs else "get_account")
-    nodes["set_failed"] = set_node("set_failed", fail_o[0], fail_o[1], "end_failed")
-    nodes["end_failed"] = end_node("end_failed", "I could not verify your identity, so I cannot continue this call. " + ((idn.get("fail") or {}).get("say") or "Please use the mobile app or visit a branch.").replace("Do not state the debt.", "").replace("Tell the customer to", "Please").strip() + " Thank you, goodbye.")
-    nodes["set_declined"] = set_node("set_declined", decl_o[0], decl_o[1], "end_declined")
-    nodes["end_declined"] = end_node("end_declined", "I understand. Without the security check I cannot continue. Thank you, goodbye.")
+    # a brief without a security check (the caller was identified before the call) gets no identity exits at all:
+    # nothing would lead to them, and the platform rejects a node that nothing reaches
+    mr = decl_o if qs else uo
+    nodes["mark_reached"] = set_node("mark_reached", mr[0], mr[1], "identity_q1" if qs else "get_account")
+    if qs:
+        nodes["set_failed"] = set_node("set_failed", fail_o[0], fail_o[1], "end_failed")
+        nodes["end_failed"] = end_node("end_failed", "I could not verify your identity, so I cannot continue this call. " + ((idn.get("fail") or {}).get("say") or "Please use the mobile app or visit a branch.").replace("Do not state the debt.", "").replace("Tell the customer to", "Please").strip() + " Thank you, goodbye.")
+        nodes["set_declined"] = set_node("set_declined", decl_o[0], decl_o[1], "end_declined")
+        nodes["end_declined"] = end_node("end_declined", "I understand. Without the security check I cannot continue. Thank you, goodbye.")
 
     # account + facts
     nodes["get_account"] = api_node("get_account", tool_json(T["get_account"], cust("get_account"), "The customer's late products.", max_retries=2), "compute_facts",

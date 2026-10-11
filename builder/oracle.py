@@ -135,6 +135,9 @@ def check(llm, spec, material, openapi, log=print, rounds=2):
         cases = generate_cases(llm, material, openapi)
     except Exception as e:
         log("oracle skipped: " + str(e)[:160]); return spec, "skipped"
+    if not cases:
+        log("WARNING: the oracle wrote no test situation: the spec was NOT cross-checked against the material")
+        return spec, "0 / 0 independent situations (spec not cross-checked)"
     res = run_cases(spec, openapi, cases)
     broken = [k for k, b in res.items() if b and b[0].startswith("case could not run")]
     cases = [c for c in cases if str(c.get("id")) not in broken]     # a malformed test says nothing about the spec
@@ -176,7 +179,8 @@ def check(llm, spec, material, openapi, log=print, rounds=2):
         new = run_cases(trial, openapi, cases)
         fixed = [k for k in bad if not new.get(k)]
         broke = [k for k, b in res.items() if not b and new.get(k)]
-        n_old, n_new = len(bad), sum(1 for b in new.values() if b)
+        # count single disagreements, not cases: a case wrong on both its deadline and its floor still improves when one is fixed
+        n_old, n_new = sum(len(b) for b in bad.values()), sum(len(b) for b in new.values())
         ok = n_new < n_old and not broke and len(validate(trial, openapi)) <= before
         for pt in patches:
             log(f"  oracle patch {'KEPT' if ok else 'rejected'}: {pt.get('path')} = {json.dumps(pt.get('value'))[:120]} | {str(pt.get('evidence'))[:120]}")
@@ -185,4 +189,6 @@ def check(llm, spec, material, openapi, log=print, rounds=2):
             break
         spec, res = trial, new
     n_bad = sum(1 for b in res.values() if b)
+    if res and n_bad:
+        log(f"WARNING: {n_bad} of {len(res)} independent situations still disagree with the code after the oracle rounds: the spec may compute a deadline or floor the material does not allow")
     return spec, f"{len(res) - n_bad} / {len(res)} independent situations agree with the code"

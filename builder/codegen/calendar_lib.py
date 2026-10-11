@@ -169,6 +169,15 @@ def floor_of(p, band=None):
         return p.get(field)
     due = _num(p.get('past_due'))
     pct = _num(am.get('floor_percent_of_past_due'))
+    by_type = am.get('floor_percent_by_type') or dict()
+    tp = _num(by_type.get(str(p.get('type'))))
+    if tp <= 0 and field:
+        # a sentence such as '30 percent of overdue_amount' written where a field name belongs still says the percentage
+        m = re.search(r'(\d+(?:\.\d+)?)\s*(?:%|per ?cent)', str(field))
+        if m:
+            tp = float(m.group(1))
+    if tp > 0:
+        pct = tp
     fixed = _num(am.get('floor_fixed_amount'))
     parts = []
     if pct > 0:
