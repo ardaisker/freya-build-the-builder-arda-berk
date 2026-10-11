@@ -28,6 +28,28 @@ def install(log=print, tries=6):
     freya.api = api
 
 
+def _clear_stale(freya, log, older_than_s=1500):
+    """A simulation of ours that stays 'running' long after its calls ended blocks the workspace's only slot
+    (seen on 11 Oct: the first 'completed' update did not stick). Mark such leftovers completed."""
+    import datetime
+    try:
+        r = freya.api("GET", "/api/v2/simulations")
+        items = r.get("simulations") or r.get("items") or r
+        now = datetime.datetime.now(datetime.timezone.utc)
+        for s in items if isinstance(items, list) else []:
+            if s.get("status") != "running":
+                continue
+            try:
+                age = (now - datetime.datetime.fromisoformat(str(s.get("createdAt")).replace("Z", "+00:00"))).total_seconds()
+            except Exception:
+                continue
+            if age > older_than_s:
+                log(f"simulation {s.get('id')} has been 'running' for {age:.0f} s: marking it completed")
+                freya.api("PUT", f"/api/v2/simulations/{s.get('id')}", {"status": "completed"})
+    except Exception as e:
+        log(f"could not clear stale simulations: {e}")
+
+
 def install_watchdog(log=print, hard_limit_s=1800):
     """Replace freya.run_simulation with one that cannot hang: a simulation whose runs all have a verdict but whose
     status stays 'running' (seen on 10 Oct with an 'inconclusive' run) is marked completed through the documented
@@ -39,6 +61,7 @@ def install_watchdog(log=print, hard_limit_s=1800):
     def run_simulation(agent_id, name, variables_by_persona, max_seconds=420, concurrency=None):
         import os
         concurrency = concurrency or int(os.environ.get("FREYA_SIM_CONCURRENCY", "5"))
+        blocked = 0
         while True:
             try:
                 sim = freya.api("POST", "/api/v2/simulations", {
@@ -51,6 +74,9 @@ def install_watchdog(log=print, hard_limit_s=1800):
                 if "concurrent simulations" not in str(e):
                     raise
                 log("another simulation is running in this workspace, waiting 30 s"); time.sleep(30)
+                blocked = blocked + 1
+                if blocked % 10 == 0:
+                    _clear_stale(freya, log)
         sim_id = (sim.get("simulation") or sim)["id"]
         t0, status, it_id = time.time(), "running", None
         while True:
