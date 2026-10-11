@@ -83,7 +83,7 @@ def transcript(call):
     return "\n".join(lines)
 
 
-def run_scenarios(agent_id, spec, log, state_path, max_seconds=300, limit=12):
+def run_scenarios(agent_id, spec, log, state_path, max_seconds=300, limit=16):
     """Play the spec's scenarios against the agent. Returns rows with the transcript and the platform judge's verdict."""
     import freya
     scenarios = [s for s in spec.get("scenarios") or [] if isinstance(s, dict) and s.get("customer")][:limit]

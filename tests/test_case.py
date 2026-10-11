@@ -156,9 +156,9 @@ def test_spoken_amounts_digits_and_lists():
 
 def test_a_masked_value_is_matched_position_by_position():
     e = env(cc.ROUTE_LIB)
-    cands = ["AB0000******6839", "AB0090******6839"]
-    assert e["snap"]("AB00901234566839", cands) == "AB0090******6839"
-    assert e["snap"]("AB00 0000 0000 6839", cands) == "AB0000******6839"
+    cands = ["310000******6839", "310090******6839"]
+    assert e["snap"]("3100901234566839", cands) == "310090******6839"
+    assert e["snap"]("3100 0000 0000 6839", cands) == "310000******6839"
 
 
 def test_a_rule_can_read_another_services_answer():
@@ -220,3 +220,46 @@ def test_error_answers_are_routed_by_the_engine_and_named_in_the_prompt():
                                                                                   {"variable": "get_parcel_status_code", "operator": "not_equals", "operand": "404"}, {"variable": "get_parcel_status_code", "operator": "not_equals", "operand": "410"}]
     assert wf["nodes"][e[0]["target_node"]]["terminal"]["function"]["parameters"]["properties"]["spoken_message"]["default"] == "I am handing you over to a colleague now."
     assert "IF A SERVICE CALL FAILS" in m["task_message"] and "get_parcel fails with status 404 and the answer contains GONE_7: Say the parcel is gone." in m["task_message"] and "Ask for the number again." in m["task_message"]
+
+
+def test_look_alike_records_are_told_apart_by_code():
+    e = env(cc.ROUTE_LIB)
+    recs = [{"id": "310000******6839", "kind": "Blue"}, {"id": "310090******6839", "kind": "Blue"}, {"id": "310000******7001", "kind": "Blue"}, {"id": "310000******5550", "kind": "Red"}]
+    n = lambda chosen, said: (lambda st, m: (st, [r["id"] for r in m]))(*e["narrow"](chosen, said, recs, "id", "kind"))
+    assert n("310000******5550", "") == ("ok", ["310000******5550"])                                   # a unique name needs no digits
+    assert n("310000******6839", "")[0] == "many" and len(n("310000******6839", "")[1]) == 3            # three share the name
+    assert n("310000******6839", "7001") == ("one", ["310000******7001"])                               # the digits decide, not the pick
+    assert n("310000******6839", "6839") == ("many", ["310000******6839", "310090******6839"])
+    assert n("310000******6839", "126839")[0] == "many"                                                 # the masked part fits anything
+    assert n("310000******6839", "3100901234566839") == ("one", ["310090******6839"])                   # the whole number settles it
+    assert n("310000******6839", "9991") == ("none", [])                                                # digits that fit no record
+    assert e["narrow"]("x", "6839", recs[:1], "id", "kind")[0] == "ok"                                  # a single record is never held back
+
+
+def test_an_unsettled_choice_reads_nothing_and_tells_the_agent_what_to_ask():
+    spec = json.loads(json.dumps(SPEC))
+    spec["tools"][1]["params"][0]["from_result"] = {"tool": "get_member", "path": "parcels.*.no", "tell_apart": {"list": "parcels", "value": "no", "label": "kind",
+        "steps": [{"digits_up_to": 0, "then": "Ask the last three digits of the [[label]] parcel."}, {"digits_up_to": 3, "then": "[[count]] parcels end in [[digits]]: ask for the whole number."}], "no_match": "Say no parcel has these digits."}}
+    wf = cc.compile_case(spec, "https://x.test")
+    assert lint(wf) == []
+    tool = wf["nodes"]["main"]["tools"][0]
+    assert "digits_said" in tool["function"]["parameters"]["properties"]["body"]["properties"]
+    listing = json.dumps({"parcels": [{"no": "77**123", "kind": "Box"}, {"no": "78**123", "kind": "Box"}, {"no": "77**999", "kind": "Tube"}]})
+    def call(body):
+        v = {"get_member_json": listing, "memberId": "M-1"}
+        config = {"body": dict(body), "headers": {}}
+        exec(tool["pre_process_code"], {"config": config, "vars": v})
+        result = {"status": "success", "status_code": 200, "data": {"anything": 1}}
+        exec(tool["post_process_code"], {"result": result, "vars": v})
+        return config, result["data"], v
+    config, data, v = call({"trackingno": "77**123", "digits_said": ""})
+    assert config["url"] == "https://x.test/_echo/members/M-1" and config["method"] == "GET"            # the earlier read is repeated, the parcel is not read
+    assert data["what_to_do_next"] == "Ask the last three digits of the Box parcel." and v["get_parcel_blocked"] == ""
+    config, data, v = call({"trackingno": "77**123", "digits_said": "123"})
+    assert data["what_to_do_next"] == "2 parcels end in 123: ask for the whole number."
+    config, data, v = call({"trackingno": "77**123", "digits_said": "7855123"})
+    assert config["url"].startswith("https://x.test/_echo/parcels/78%2A%2A123") and "not_read" not in data        # the digits picked the other record
+    config, data, v = call({"trackingno": "77**999", "digits_said": ""})
+    assert config["url"].startswith("https://x.test/_echo/parcels/77") and "not_read" not in data          # a unique name goes straight through
+    config, data, v = call({"trackingno": "77**123", "digits_said": "555"})
+    assert data["what_to_do_next"] == "Say no parcel has these digits."

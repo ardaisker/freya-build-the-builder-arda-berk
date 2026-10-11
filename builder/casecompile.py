@@ -95,6 +95,41 @@ def collect(d, path):
         cur = nxt
     return cur
 
+def narrow(chosen, said, records, vf, lf):
+    """Which records the caller can mean. `said` holds every digit the caller has given, `chosen` the model's pick.
+    ('one', [record]) when the digits (or the label) leave exactly one; ('many', [...]) when several still fit;
+    ('none', []) when the digits fit no record; ('ok', ...) when there is nothing to tell apart."""
+    recs = [r for r in records if isinstance(r, dict) and r.get(vf) not in (None, '')]
+    if len(recs) < 2:
+        return 'ok', recs
+    sd = re.sub(r'[^0-9]', '', str(said or ''))
+    def label(r):
+        return str(r.get(lf) or '').strip().lower()
+    def fits(r):
+        v = str(r.get(vf))
+        if len(sd) > len(v):
+            return False
+        tail = v[len(v) - len(sd):]
+        return all([(a == b) or not re.match(r'[0-9A-Za-z]', a) for a, b in zip(tail, sd)])
+    mine = [r for r in recs if str(r.get(vf)) == str(chosen)]
+    if not sd:
+        if not mine:
+            return 'ok', recs
+        same = [r for r in recs if label(r) == label(mine[0])]
+        return ('ok', same) if len(same) == 1 else ('many', same)
+    m = [r for r in recs if fits(r)]
+    if len(m) == 1:
+        return 'one', m
+    if not m:
+        return 'none', []
+    if mine:
+        m2 = [r for r in m if label(r) == label(mine[0])]
+        if len(m2) == 1:
+            return 'one', m2
+        if m2:
+            m = m2
+    return 'many', m
+
 def route_request(method, url, params, values):
     """params: [name, where, type, target]. Returns (url, headers, body) for the real request."""
     headers = dict()
@@ -135,7 +170,42 @@ try:
                 b[name] = snap(b[name], collect(json.loads(vars.get(tool + '_json') or 'null'), path))
         except Exception:
             pass
-    url, headers, body = route_request(METHOD, URL, PARAMS, b)
+    blocked = ''
+    for name, said_key, tool, lst, vf, lf, steps, none_text in APART:
+        try:
+            said = b.pop(said_key, '')
+            if _unset(b.get(name)) or int(vars.get(TOOL + '_blocks') or 0) >= 4:
+                continue
+            records = collect(json.loads(vars.get(tool + '_json') or 'null'), lst + '.*')
+            state, m = narrow(b.get(name), said, records, vf, lf)
+            digits = re.sub(r'[^0-9]', '', str(said or ''))
+            if state == 'one':
+                b[name] = m[0].get(vf)
+            elif state == 'many':
+                text = ''
+                for st in steps:
+                    if len(digits) <= int(st.get('digits_up_to') or 0):
+                        text = str(st.get('then') or '')
+                        break
+                text = text or (str(steps[-1].get('then') or '') if steps else '')
+                blocked = (text or 'Several records still fit what the caller said. Do not pick one: ask for the next detail that tells them apart, as the procedure says.')
+                blocked = blocked.replace('[[count]]', str(len(m))).replace('[[digits]]', digits).replace('[[label]]', str(m[0].get(lf) or ''))
+            elif state == 'none':
+                blocked = none_text or 'The digits the caller gave fit none of their records. Do not pick one: follow the procedure for digits that fit no record.'
+        except Exception:
+            pass
+    if blocked:
+        # the choice is not settled: nothing is read. The harmless earlier read is repeated instead and the agent is told what to ask.
+        vars[TOOL + '_blocked'] = blocked
+        vars[TOOL + '_blocks'] = int(vars.get(TOOL + '_blocks') or 0) + 1
+        vals = dict()
+        for key, src in REPEAT_VALUES:
+            vals[key] = vars.get(src[4:]) if src.startswith('var:') else src[4:]
+        url, headers, body = route_request(REPEAT_METHOD, REPEAT_URL, REPEAT_PARAMS, vals)
+        config['method'] = REPEAT_METHOD
+    else:
+        url, headers, body = route_request(METHOD, URL, PARAMS, b)
+        config['method'] = METHOD
     config['url'] = url
     h = config.get('headers')
     if not isinstance(h, dict):
@@ -143,11 +213,10 @@ try:
     for k in headers:
         h[k] = headers[k]
     config['headers'] = h
-    if METHOD in ('GET', 'HEAD', 'DELETE') and not body:
+    if config['method'] in ('GET', 'HEAD', 'DELETE') and not body:
         config['body'] = None
     else:
         config['body'] = body
-    config['method'] = METHOD
 except Exception:
     pass
 '''
@@ -364,8 +433,19 @@ def guidance(rules, sc, d, ok_text, err_text):
 '''
 
 POST_HOOK = r'''
+held = ''
 try:
-    if isinstance(result, dict):
+    held = str(vars.get(TOOL + '_blocked') or '')
+    if held:
+        vars[TOOL + '_blocked'] = ''
+        vars[TOOL + '_go'] = ''
+        if isinstance(result, dict):
+            result.pop('header', None)
+            result['data'] = dict(not_read='Nothing was read: it is not settled yet which record the caller means.', what_to_do_next=held)
+except Exception:
+    held = ''
+try:
+    if isinstance(result, dict) and not held:
         result.pop('header', None)
         sc = result.get('status_code')
         d = result.get('data')
@@ -463,7 +543,28 @@ def snaps(t, call_vars):
     return out
 
 
-def case_tool(t, base_url, call_vars, timeout_ms=25000, endings=None):
+def apart(t, call_vars, by_name):
+    """Config for parameters whose value picks one of several look-alike records of an earlier result.
+    Returns ([name, said_key, tool, list, value field, label field, steps, none text], repeat request of the earlier read)."""
+    out, repeat = [], None
+    for p in t.get("params") or []:
+        fr = p.get("from_result") if isinstance(p, dict) else None
+        ta = fr.get("tell_apart") if isinstance(fr, dict) else None
+        if not (isinstance(ta, dict) and ta.get("list") and ta.get("value") and str(p.get("source") or "model") == "model"):
+            continue
+        src = by_name.get(ident(fr.get("tool")))
+        if not src or not all(str(x.get("source") or "").startswith(("variable:", "const:")) for x in src.get("params") or [] if isinstance(x, dict)):
+            continue                                   # the earlier read cannot be repeated by code: no narrowing
+        key = ident(str(p["name"]).replace(".", "_"), "arg")
+        key = ("arg_" + key) if key in call_vars else key
+        steps = [{"digits_up_to": int(st.get("digits_up_to") or 0), "then": str(st.get("then") or "")} for st in ta.get("steps") or [] if isinstance(st, dict)]
+        out.append([key, "digits_said", ident(fr["tool"]), str(ta["list"]), str(ta["value"]), str(ta.get("label") or ""), sorted(steps, key=lambda st: st["digits_up_to"]), str(ta.get("no_match") or "")])
+        repeat = src
+        break                                          # one such parameter per service
+    return out, repeat
+
+
+def case_tool(t, base_url, call_vars, timeout_ms=25000, endings=None, by_name=None):
     name = ident(t.get("name"), "service")
     method = str(t.get("method") or "POST").upper()
     url = base_url.rstrip("/") + "/" + str(t.get("path") or "").lstrip("/")
@@ -471,6 +572,13 @@ def case_tool(t, base_url, call_vars, timeout_ms=25000, endings=None):
     rules = [r for r in (t.get("result_rules") or []) if isinstance(r, dict) and (r.get("then") or r.get("go"))] if isinstance(t.get("result_rules"), list) else []
     go_map = {str(r.get("go")): ident(r.get("go")) for r in rules if r.get("go") and ident(r.get("go")) in (endings or [])}
     desc = (str(t.get("purpose") or "").strip() + " " + str(t.get("call_when") or "").strip()).strip() or name
+    apart_cfg, repeat = apart(t, call_vars, by_name or {})
+    rep = {"method": "GET", "url": "", "params": [], "values": []}
+    if apart_cfg and repeat:
+        r_route, r_props, _ = tool_params(repeat, call_vars)
+        rep = {"method": str(repeat.get("method") or "POST").upper(), "url": base_url.rstrip("/") + "/" + str(repeat.get("path") or "").lstrip("/"), "params": r_route,
+               "values": [[k, ("var:" + str(leaf.get("default")).strip("{} ")) if str(leaf.get("default")).startswith("{{") else ("lit:" + str(leaf.get("default")))] for k, leaf in r_props.items()]}
+        props["digits_said"] = {"type": "string", "default": "{{digits_said}}", "description": "Every digit the caller has said so far to identify it, as digits only and in the order said (for example the last four, the last six or the whole number). Empty if the caller only said a name."}
     tool = {
         "type": "function",
         "config": {"timeoutMs": int(max(3, min(28, float(t.get("timeout_seconds") or timeout_ms / 1000))) * 1000), "maxRetries": int(max(0, min(2, int(t.get("retries") or 0))))},
@@ -480,7 +588,7 @@ def case_tool(t, base_url, call_vars, timeout_ms=25000, endings=None):
                          "method": {"type": "string", "default": method},
                          "headers": {"type": "object", "properties": {"Content-Type": {"type": "string", "default": "application/json"}}},
                          "body": {"type": "object", "required": required, "properties": props}}}},
-        "pre_process_code": hook_consts(METHOD=method, URL=url, PARAMS=route, SNAP=snaps(t, call_vars)) + ROUTE_LIB + PRE_HOOK,
+        "pre_process_code": hook_consts(METHOD=method, URL=url, PARAMS=route, SNAP=snaps(t, call_vars), TOOL=name, APART=apart_cfg, REPEAT_METHOD=rep["method"], REPEAT_URL=rep["url"], REPEAT_PARAMS=rep["params"], REPEAT_VALUES=rep["values"]) + ROUTE_LIB + PRE_HOOK,
         "post_process_code": hook_consts(RULES=rules, GO=go_map, REFS=sorted({ident(m) for m in re.findall(r"@([A-Za-z0-9_. -]+?)\.", json.dumps([rules, t.get("derive") or []]))}), DERIVE=[r for r in (t.get("derive") or []) if isinstance(r, dict)], OK_TEXT=str(t.get("on_ok") or OK_TEXT), ERR_TEXT=str(t.get("on_error") or ERR_TEXT), TOOL=name, LIMIT=6000) + RESULT_LIB + POST_HOOK,
     }
     return name, tool
@@ -638,9 +746,10 @@ def compile_case(spec: dict, base_url: str) -> dict:
         endings = [("done", {"when": "The caller needs nothing else, or the procedure is finished.", "say": ""})]
     end_ids = [eid for eid, _ in endings]
     tools, order = {}, []
+    by_name = {ident(t.get("name")): t for t in (spec.get("tools") if isinstance(spec.get("tools"), list) else []) if isinstance(t, dict)}
     for t in spec.get("tools") if isinstance(spec.get("tools"), list) else []:
         if isinstance(t, dict) and t.get("path"):
-            name, tool = case_tool(t, base_url, call_vars, endings=end_ids)
+            name, tool = case_tool(t, base_url, call_vars, endings=end_ids, by_name=by_name)
             if name not in tools:
                 tools[name] = (t, tool)
                 order.append(name)
@@ -677,7 +786,7 @@ def compile_case(spec: dict, base_url: str) -> dict:
     for n in order:
         setup += "vars['" + n + "_result'] = '(not loaded)'\nvars['" + n + "_state'] = 'not_called'\n"
         setup += "vars['" + n + "_go'] = ''\n"
-        setup += "vars['" + n + "_json'] = 'null'\n"
+        setup += "vars['" + n + "_json'] = 'null'\nvars['" + n + "_blocked'] = ''\nvars['" + n + "_blocks'] = 0\n"
 
     for eid, e in endings:
         setup += "vars['say_" + eid + "'] = " + json.dumps(scrub(str(e.get("say") or "").strip(), set()), ensure_ascii=True).replace("{", "(").replace("}", ")") + "\n"
