@@ -367,5 +367,14 @@ def test_security_layer():
     # unknown product or missing facts: the guard stays out of the way
     cfg = {"body": {"product_id": "zz", "amount": 1, "date": "2031-01-01"}}
     exec(pre, {"vars": {}, "config": cfg}); assert "amount" in cfg["body"]
+    # values the platform hands over in an unexpected shape never block a promise
+    odd = dict(w, g_days_p1={"value": w["g_days_p1"], "confidence": 1.0}, g_floor_p1={"value": w["g_floor_p1"]})
+    cfg = {"body": {"product_id": "p1", "amount": 540, "date": "2026-10-14"}}
+    exec(pre, {"vars": odd, "config": cfg}); assert "amount" in cfg["body"]
+    odd = dict(w, g_days_p1="<object>", g_floor_p1="n/a")
+    cfg = {"body": {"product_id": "p1", "amount": 540, "date": "2026-12-31"}}
+    exec(pre, {"vars": odd, "config": cfg}); assert "amount" in cfg["body"]
+    cfg = {"body": {"product_id": "p1", "amount": 540, "date": "14 October"}}
+    exec(pre, {"vars": dict(w), "config": cfg}); assert "amount" in cfg["body"]
     sp = wf["system_prompt"]
     assert "SECURITY" in sp and "PRIVACY" in sp
