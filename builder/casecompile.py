@@ -153,8 +153,13 @@ except Exception:
 '''
 
 RESULT_LIB = r'''
+OTHER = dict()
+
 def _get(d, path):
     cur = d
+    if str(path or '').startswith('@'):          # @service.path reads the last good answer of another service
+        name, _, path = str(path)[1:].partition('.')
+        cur = OTHER.get(re.sub(r'[^a-z0-9_]+', '_', name.strip().lower()).strip('_'))
     for part in [p for p in re.split(r'[.\[\]]+', str(path or '')) if p != '']:
         if isinstance(cur, dict):
             cur = cur.get(part)
@@ -358,6 +363,11 @@ try:
                 d = json.loads(d)
             except Exception:
                 pass
+        for name in REFS:
+            try:
+                OTHER[name] = json.loads(vars.get(name + '_json') or 'null')
+            except Exception:
+                pass
         derive(DERIVE, d, _date(vars.get('today_iso')))
         text, go, say = guidance(RULES, sc, d, OK_TEXT, ERR_TEXT)
         go = GO.get(go, '')
@@ -460,7 +470,7 @@ def case_tool(t, base_url, call_vars, timeout_ms=25000, endings=None):
                          "headers": {"type": "object", "properties": {"Content-Type": {"type": "string", "default": "application/json"}}},
                          "body": {"type": "object", "required": required, "properties": props}}}},
         "pre_process_code": hook_consts(METHOD=method, URL=url, PARAMS=route, SNAP=snaps(t, call_vars)) + ROUTE_LIB + PRE_HOOK,
-        "post_process_code": hook_consts(RULES=rules, GO=go_map, DERIVE=[r for r in (t.get("derive") or []) if isinstance(r, dict)], OK_TEXT=str(t.get("on_ok") or OK_TEXT), ERR_TEXT=str(t.get("on_error") or ERR_TEXT), TOOL=name, LIMIT=6000) + RESULT_LIB + POST_HOOK,
+        "post_process_code": hook_consts(RULES=rules, GO=go_map, REFS=sorted({ident(m) for m in re.findall(r"@([A-Za-z0-9_. -]+?)\.", json.dumps([rules, t.get("derive") or []]))}), DERIVE=[r for r in (t.get("derive") or []) if isinstance(r, dict)], OK_TEXT=str(t.get("on_ok") or OK_TEXT), ERR_TEXT=str(t.get("on_error") or ERR_TEXT), TOOL=name, LIMIT=6000) + RESULT_LIB + POST_HOOK,
     }
     return name, tool
 
@@ -644,7 +654,7 @@ def compile_case(spec: dict, base_url: str) -> dict:
     return {"initial_node": "setup", "system_prompt": scrub(system, set()), "nodes": nodes, "global_nodes": {}, "tools": [], "test_variables": test_vars}
 
 
-def run_tool_locally(t, base_url, call_vars, values, timeout=20, examples=None, today=None, endings=None):
+def run_tool_locally(t, base_url, call_vars, values, timeout=30, examples=None, today=None, endings=None, other=None):
     """The builder's own check of one service call: the same routing code the platform hook runs, then a real HTTP request."""
     import urllib.request, urllib.error
     route, props, _ = tool_params(t, call_vars)
@@ -681,7 +691,7 @@ def run_tool_locally(t, base_url, call_vars, values, timeout=20, examples=None, 
         parsed = raw
     # the post-hook, as the platform would run it
     result = {"status": "success" if 200 <= status < 300 else "error", "data": parsed, "status_code": status, "header": {}}
-    henv = {"result": result, "vars": {"today_iso": str(today or "")}}
+    henv = {"result": result, "vars": {"today_iso": str(today or ""), **(other or {})}}
     name, tool = case_tool(t, base_url, call_vars, endings=endings)
     exec(tool["post_process_code"], henv)
     go = henv["vars"].get(name + "_go") or ""

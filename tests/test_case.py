@@ -159,3 +159,15 @@ def test_a_masked_value_is_matched_position_by_position():
     cands = ["AB0000******6839", "AB0090******6839"]
     assert e["snap"]("AB00901234566839", cands) == "AB0090******6839"
     assert e["snap"]("AB00 0000 0000 6839", cands) == "AB0000******6839"
+
+
+def test_a_rule_can_read_another_services_answer():
+    _, tool = cc.case_tool({"name": "second", "path": "/p", "method": "POST", "params": [], "derive": [{"name": "who", "op": "first_of", "default": "nobody", "items": [{"when": [{"path": "@First Lookup.owner", "op": "nonempty"}], "text": "[[@first_lookup.owner]]"}]}],
+                            "result_rules": [{"status": "ok", "when": [{"path": "@first_lookup.items", "op": "count_gt", "value": 1}], "then": "Several, owner [[computed.who]]."}, {"status": "ok", "then": "One."}]}, "https://x.test", [])
+    v = {"first_lookup_json": json.dumps({"owner": "Kim", "items": [1, 2]})}
+    result = {"status": "success", "status_code": 200, "data": {}}
+    exec(tool["post_process_code"], {"result": result, "vars": v})
+    assert result["data"]["what_to_do_next"] == "Several, owner Kim."
+    result = {"status": "success", "status_code": 200, "data": {}}
+    exec(tool["post_process_code"], {"result": result, "vars": {}})
+    assert result["data"]["what_to_do_next"] == "One."
