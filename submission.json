@@ -1,0 +1,13 @@
+{
+  "team": "arda-berk",
+  "members": [
+    { "name": "Arda Ege İsker", "email": "ardaegeisker@gmail.com" },
+    { "name": "Berk Çiçek", "email": "berk9848@gmail.com" }
+  ],
+  "repo": "https://github.com/ardaisker/freya-build-the-builder-arda-berk",
+  "commit": "d7c4bff768b112f77576c1027af1c01b8d83a57f",
+  "run_command": "python3 builder/build.py {case_folder} --tool-url https://freya-bank-mock.ardaegeisker.workers.dev --max-test-rounds 3",
+  "workflow": "submission/final.workflow.json",
+  "trace": "traces/final.log",
+  "mock_url": "https://freya-bank-mock.ardaegeisker.workers.dev"
+}
