@@ -106,3 +106,21 @@ lines added since the `pre-reveal` tag with the final pack (what it still lists 
 
 The mock of the client's services lives in `mock/` (a Cloudflare Worker). It is written by hand as the task asks, serves
 the pack's test answers word for word (`mock/check_mock.py` compares all of them) and is not part of the builder.
+
+### What changed after the final case opened (stated plainly)
+
+Before 17:00 UTC the builder had one road: the collection call with the kit's tool API (tag `pre-reveal`). It could not
+read a folder of client documents or call services it had never seen: on such input it stopped. That is the bug we fixed
+in the three hours: `git diff pre-reveal..HEAD -- builder tests` shows everything.
+
+- What was added is general: reading any folder, a case spec written by the builder's model, a compiler from that spec to
+  a workflow, service checks, test conversations, revision. No file under `builder/` contains a service name, a field
+  name, a sentence, a customer or a value of the final case; `python3 builder/leakcheck.py --base pre-reveal <pack files>`
+  lists what the added lines share with the pack (ordinary English words).
+- Some general abilities were added because the first runs on the final case failed without them, and we say so: error
+  answers routed by the engine (the platform runs no hook on an HTTP error), figures prepared for speech by code, and
+  look-alike records told apart by code. Each is driven only by what the builder's model writes into the spec from the
+  material, and each has a unit test on made-up data (`tests/test_case.py`).
+- Everything about the final case itself (rules, sentences, decisions between contradicting documents) comes out of the
+  builder run and is in its trace. The spec and the workflow were never edited by hand.
+- The collection road is untouched: its 15,640 computed outputs are identical to the pre-reveal ones (`builder/golden.py`).
