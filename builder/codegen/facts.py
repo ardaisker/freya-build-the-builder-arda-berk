@@ -36,11 +36,11 @@ try:
         plan = ''
         offers = f.get('offers') or []
         for k, o in enumerate(offers):
-            od = fmt(datetime.date.fromisoformat(o['date']))
+            od = offer_date_say(o)
             if k == 0:
                 plan = 'SCRIPT for ' + f['product_id'] + ' after a refusal: offer 1 = "' + offer_amount_text(o, f) + ' on ' + od + '"'
                 if str(o.get('amount')) == 'full_or_floor_if_too_much':
-                    plan += ' (use the floor ' + money(f['floor']) + ' instead if the full amount was too much)'
+                    plan += ' (use the floor ' + floor_say(f) + ' instead if the full amount was too much)'
                 plan += '.'
             else:
                 plan += ' If refused, offer ' + str(k + 1) + ' = "' + offer_amount_text(o, f) + ' on ' + od + '".'
@@ -50,7 +50,7 @@ try:
             plan += ' If refused again, STOP: call add_note for ' + f['product_id'] + ' (or close the call if it is the only product). No further offer.'
         elif f['attempts'] <= 0:
             plan = 'No persuasion offer for ' + f['product_id'] + ': after a refusal, stop.'
-        lines.append('PRODUCT ' + f['product_id'] + ': ' + f['label'] + '. Past due ' + money(f['past_due']) + ', ' + str(f['days_late']) + ' days late, band "' + f['band'] + '". LATEST PAYMENT DATE (deadline) ' + fmt(dl) + '. FLOOR (lowest amount you may accept) ' + money(f['floor']) + '. Persuasion attempts allowed: ' + str(f['attempts']) + '. ' + plan)
+        lines.append('PRODUCT ' + f['product_id'] + ': ' + f['label'] + '. Past due ' + money(f['past_due']) + ', ' + str(f['days_late']) + ' days late, band "' + f['band'] + '". LATEST PAYMENT DATE (deadline) ' + deadline_say(f) + '. FLOOR (lowest amount you may accept) ' + floor_say(f) + '. Persuasion attempts allowed: ' + str(f['attempts']) + '. ' + plan)
     if len(pf) > 1:
         lines.append('There are ' + str(len(pf)) + ' late products, in this order: ' + ', '.join([f['product_id'] + ' ' + f['label'] for f in pf]) + '.')
     vars['facts'] = '\n'.join(lines)

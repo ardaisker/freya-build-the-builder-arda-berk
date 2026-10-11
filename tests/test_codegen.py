@@ -364,6 +364,11 @@ def test_security_layer():
     exec(post, {"vars": w, "result": res})
     assert "NOT recorded" in res["data"]["what_to_do_next"] and "technical" in res["data"]["what_to_do_next"] and not w.get("promise_fail_n")
     body, why = call(540, "2026-10-14"); assert "amount" in body and not why        # a valid one still goes through
+    w["promise_blocked"] = "left over from a parallel call"
+    res = {"status": "success", "data": {"ok": True, "promise_id": "pr1"}}
+    exec(post, {"vars": w, "result": res})
+    assert "recorded" in res["data"]["what_to_do_next"] and "NOT" not in res["data"]["what_to_do_next"]   # a saved promise is never reported as refused
+    w["promise_blocked"] = ""
     # unknown product or missing facts: the guard stays out of the way
     cfg = {"body": {"product_id": "zz", "amount": 1, "date": "2031-01-01"}}
     exec(pre, {"vars": {}, "config": cfg}); assert "amount" in cfg["body"]
@@ -378,3 +383,38 @@ def test_security_layer():
     exec(pre, {"vars": dict(w), "config": cfg}); assert "amount" in cfg["body"]
     sp = wf["system_prompt"]
     assert "SECURITY" in sp and "PRIVACY" in sp
+
+
+def test_rules_the_code_cannot_compute_stay_in_words():
+    """A deadline, floor or offer date outside the forms the code knows is handed to the phone agent as the bank's
+    wording, and no code check is tied to a made-up value."""
+    import compile as comp
+    spec = json.load(open(ROOT / "fixtures" / "soft-rules.spec.json"))
+    api = json.load(open(ROOT / "tools" / "openapi.json"))
+    wf = comp.compile_workflow(spec, api)                      # compiles like any other brief
+    S = dict(spec, api=apimap.resolve(spec, api))
+    prods = [{"product_id": "p1", "type": "personal_loan", "past_due": 900, "days_late": 20, "instalment_amount": 300},
+             {"product_id": "p2", "type": "credit_card", "card_last4": "6604", "past_due": 300, "days_late": 4, "minimum_payment": 90}]
+    v = {"now": NOW, "account_products": json.dumps(prods)}
+    exec(snippet("facts", libs=("calendar_lib", "dateparse_lib"), SPEC=S), {"vars": v})
+    assert v["facts_state"] == "ok"
+    late = [l for l in v["facts"].split("\n") if l.startswith("PRODUCT p1")][0]
+    early = [l for l in v["facts"].split("\n") if l.startswith("PRODUCT p2")][0]
+    assert "NOT COMPUTED" in late and "second Tuesday" in late and "one third" in late and "salary day" in late
+    assert "NOT COMPUTED" not in early.split("FLOOR")[0]       # the early band's deadline is still computed
+    assert v["g_floor_p1"] in ("0", "0.0")                      # no floor check in code
+    v["customer_date_text"] = "6 November"
+    exec(snippet("resolve_date", libs=("calendar_lib", "dateparse_lib"), SPEC=S), {"vars": v})
+    assert v["resolved_date"] == "2026-11-06" and "second Tuesday" in v["date_verdict"] and "check the day yourself" in v["date_verdict"]
+    tool = [t for t in wf["nodes"]["negotiate_multi"]["tools"] if t["function"]["name"] == "create_promise"][0]
+    cfg = {"body": {"product_id": "p1", "amount": 55, "date": "2026-11-06"}}
+    exec(tool["pre_process_code"], {"vars": v, "config": cfg})
+    assert "amount" in cfg["body"] and not v.get("promise_blocked")            # the guard does not block on an unknown rule
+    cfg = {"body": {"product_id": "p1", "amount": 55, "date": "2026-11-07"}}    # a Saturday is still refused
+    exec(tool["pre_process_code"], {"vars": v, "config": cfg})
+    assert "date" not in cfg["body"]
+    # a brief that names no callback day limit does not inherit one
+    S2 = json.loads(json.dumps(S)); S2["third_party"]["callback"]["allowed_days"] = ""; S2["third_party"]["callback"].pop("max_days_ahead", None)
+    w = {"now": NOW, "callback_day_text": "Monday", "callback_time_text": "2 pm"}
+    exec(snippet("tp_resolve", libs=("calendar_lib", "dateparse_lib"), SPEC=S2), {"vars": w})
+    assert w["tp_status"] == "ok" and w["callback_date"] == "2026-10-19"

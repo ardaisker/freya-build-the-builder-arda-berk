@@ -21,11 +21,14 @@ try:
     if d is None and t and re.search(r'\b(tonight|this (morning|afternoon|evening)|later today)\b', (day_text + ' ' + time_text).lower()):
         d = today
     complete = (d is not None) and bool(t)
-    allowed = str(cb.get('allowed_days') or 'today_or_next_business_day')
+    allowed = str(cb.get('allowed_days') or '')
     try:
         max_ahead = int(cb.get('max_days_ahead', 1))
     except Exception:
         max_ahead = 1
+    if not allowed:
+        allowed = 'any'                     # the material names no day limit: any of the next business days
+        max_ahead = max(max_ahead, 10)
     okdays = []
     if ('today' in allowed or 'any' in allowed) and cb.get('include_today') is not False:
         okdays.append(today)

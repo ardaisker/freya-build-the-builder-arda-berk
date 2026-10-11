@@ -15,6 +15,8 @@ try:
         vars['vague_hint'] = 'next' if ('next week' in low or 'week after' in low or 'following week' in low) else ('this' if 'this week' in low else '')
         dls = sorted(set([f['deadline'] for f in pf]))
         prop = ', '.join([fmt(datetime.date.fromisoformat(x)) for x in dls]) if dls else 'the deadline'
+        if [f for f in pf if f.get('deadline_text')]:
+            prop = 'the latest date the bank\'s rule allows'
         verdict = 'DATE CHECK: "' + text + '" is not an exact day. Ask once for the exact day.' + ('' if str(DR.get('vague_fallback') or 'deadline') == 'none' else ' If the customer still gives none (for example says they do not know), propose the latest allowed date, ' + prop + ', and no other date.')
         status = 'vague'
     elif d is None:
@@ -62,13 +64,16 @@ try:
                 elif offers:
                     verdict += ' If the customer refuses that latest date, it is a refusal: then make'
                     for k, o in enumerate(offers):
-                        verdict += (' ATTEMPT ' if k == 0 else ' Only if that is refused too, ATTEMPT ') + str(k + 1) + ' = ' + offer_amount_text(o, f0) + ' on ' + fmt(datetime.date.fromisoformat(o['date'])) + '.'
+                        verdict += (' ATTEMPT ' if k == 0 else ' Only if that is refused too, ATTEMPT ') + str(k + 1) + ' = ' + offer_amount_text(o, f0) + ' on ' + offer_date_say(o) + '.'
                     verdict += ' After that, stop.'
                 else:
                     verdict += ' If the customer refuses that latest date, treat it as a refusal.'
                 status = 'after_deadline'
             else:
                 status = 'ok'
+    softs = [f for f in pf if f.get('deadline_text')]
+    if softs and d is not None and status in ('ok', 'not_business', 'partly_after_deadline', 'after_deadline'):
+        verdict += ' NOTE: the system could not compute the latest payment date for ' + ', '.join([f['label'] for f in softs]) + '. Before you accept a day for it, check the day yourself against this rule of the bank: "' + str(softs[0].get('deadline_text')) + '". If the day is later than the rule allows, do not accept it: say the latest date the rule allows and offer that date.'
     vars['date_verdict'] = verdict
     vars['resolved_date'] = resolved
     vars['date_status'] = status

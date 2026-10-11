@@ -220,6 +220,58 @@ def rule_date(rule, today, deadline):
             m = nxt.month
     return d
 
+KNOWN_DATE_RULES = ['today', 'deadline', 'next_business_day', 'business_days_after_today', 'calendar_days_after_today', 'last_business_day_of_week', 'end_of_month']
+
+def rule_text(rule):
+    """The bank's own wording of a date rule this code cannot compute; '' when it can compute it."""
+    r = rule if isinstance(rule, dict) else dict()
+    if str(r.get('type') or '') in KNOWN_DATE_RULES:
+        return ''
+    return str(r.get('text') or '').strip()
+
+def deadline_text(band):
+    """Not empty when the latest payment date cannot be computed here. Then the phone agent works from the bank's
+    wording instead of a computed (and possibly wrong) date, and no code check is tied to it."""
+    try:
+        if int(_num(band.get('deadline_business_days_after_today'))) > 0:
+            return ''
+        r = band.get('deadline_rule')
+        if isinstance(r, dict) and str(r.get('type') or '') in KNOWN_DATE_RULES:
+            return ''
+        t = rule_text(r) or str(band.get('deadline_text') or '').strip()
+        return t or 'the bank\'s rule for the latest payment date, as given in your instructions'
+    except Exception:
+        return ''
+
+def floor_text(p):
+    """Not empty when the lowest acceptable amount cannot be computed here: the bank's wording of the rule."""
+    try:
+        am = SPEC.get('amounts') or dict()
+        fb = am.get('floor_by_type') or dict()
+        field = fb.get(str(p.get('type')))
+        if field and p.get(field) is not None:
+            return ''
+        if _num(am.get('floor_percent_of_past_due')) > 0 or _num(am.get('floor_fixed_amount')) > 0:
+            return ''
+        return str(am.get('floor_rule_text') or '').strip()
+    except Exception:
+        return ''
+
+def floor_say(f):
+    if f.get('floor_text'):
+        return 'the lowest amount the bank accepts (not computed by the system; work it out from this rule: "' + str(f.get('floor_text')) + '")'
+    return money(f['floor'])
+
+def deadline_say(f):
+    if f.get('deadline_text'):
+        return 'NOT COMPUTED by the system: work it out yourself from TODAY, the business-day list and this rule of the bank: "' + str(f.get('deadline_text')) + '"'
+    return fmt(datetime.date.fromisoformat(f['deadline']))
+
+def offer_date_say(o):
+    if o.get('date_text'):
+        return str(o.get('date_text'))
+    return fmt(datetime.date.fromisoformat(o['date']))
+
 def deadline_of(band, today):
     d = rule_date(band.get('deadline_rule'), today, None) if isinstance(band.get('deadline_rule'), dict) else None
     if d is None:
@@ -227,7 +279,7 @@ def deadline_of(band, today):
         d = business_after(today, n) if n > 0 else next_business(today)
     return d
 
-def offers_for(band, n_allowed, today, deadline):
+def offers_for(band, n_allowed, today, deadline, soft_deadline=''):
     """The persuasion offers of one product: a list of dicts (amount kind, date), from spec.persuasion.attempts."""
     out = []
     for a in (SPEC.get('persuasion') or dict()).get('attempts') or []:
@@ -239,20 +291,29 @@ def offers_for(band, n_allowed, today, deadline):
         if len(out) >= n_allowed:
             break
         d = rule_date(a.get('date_rule'), today, deadline)
+        dtxt = ''
         if d is None:
-            continue
+            dtxt = rule_text(a.get('date_rule'))
+            if not dtxt:
+                continue
+            dtxt = 'the day this rule of the bank gives (work it out yourself): "' + dtxt + '"'
+            d = deadline if deadline is not None else today
+        elif soft_deadline and str((a.get('date_rule') or dict()).get('type') or '') == 'deadline':
+            dtxt = 'the latest payment date (work it out yourself from this rule of the bank: "' + soft_deadline + '")'
         if deadline is not None and d > deadline:
             d = deadline
         o = dict()
         o['amount'] = str(a.get('amount') or 'full')
         o['date'] = d.isoformat()
+        if dtxt:
+            o['date_text'] = dtxt
         out.append(o)
     return out
 
 def offer_amount_text(o, f):
     kind = str(o.get('amount') or 'full')
     if kind == 'floor':
-        return money(f['floor'])
+        return floor_say(f)
     return money(f['past_due'])
 
 def label_of(p):
@@ -279,9 +340,18 @@ def product_facts(today):
         f['days_late'] = p.get('days_late')
         f['band'] = str(b.get('name') or '')
         dl = deadline_of(b, today)
+        soft = deadline_text(b)
+        if soft:
+            dl = today + datetime.timedelta(days=120)       # no computed limit: nothing in code is tied to it
+            f['deadline_text'] = soft
         f['deadline'] = dl.isoformat()
-        f['floor'] = floor_of(p)
+        ft = floor_text(p)
+        if ft:
+            f['floor_text'] = ft
+            f['floor'] = 0
+        else:
+            f['floor'] = floor_of(p)
         f['attempts'] = int(_num(b.get('persuasion_attempts'), 1))
-        f['offers'] = offers_for(b, f['attempts'], today, dl)
+        f['offers'] = offers_for(b, f['attempts'], today, dl, soft)
         out.append(f)
     return out

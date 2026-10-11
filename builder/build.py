@@ -150,6 +150,19 @@ def main():
             spec = audit(llm, spec, material, openapi, log=trace.log)
     (out_dir / "spec.json").write_text(json.dumps(spec, indent=1, ensure_ascii=False))
     trace.log(f"spec written: {out_dir / 'spec.json'}  identity questions={len(spec.get('identity', {}).get('questions', []))} bands={len(spec.get('bands', []))} holidays={len(spec.get('calendar', {}).get('holidays', []))} special_cases={len(spec.get('special_cases', []))} residual_rules={len(spec.get('residual_rules', []))} multi_product={spec.get('multi_product', {}).get('enabled')}")
+    # rules the code steps cannot compute stay in the bank's words for the phone agent; say so in the trace
+    in_words = []
+    for b in spec.get("bands") or []:
+        r = b.get("deadline_rule") if isinstance(b, dict) else None
+        if isinstance(r, dict) and r.get("type") == "text":
+            in_words.append(f"latest payment date of band {b.get('name')}")
+    for at in (spec.get("persuasion") or {}).get("attempts") or []:
+        r = at.get("date_rule") if isinstance(at, dict) else None
+        if isinstance(r, dict) and r.get("type") == "text":
+            in_words.append(f"date of persuasion attempt {at.get('n')}")
+    if (spec.get("amounts") or {}).get("floor_rule_text"):
+        in_words.append("lowest acceptable amount (if no computable form applies)")
+    trace.log("rules computed in code: all" if not in_words else "rules left in the bank's words for the phone agent (not computed in code): " + "; ".join(in_words))
 
     # 2. compile + lint
     def build_and_check(spec, tag):
