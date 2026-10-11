@@ -1,5 +1,8 @@
 # ---- compute_facts: runs once after get_account. Writes `facts` (text for the prompts) and `pf_json`. ----
 SOFT = SPEC.get('soft') or dict()
+# a bank that allows several promises for one product (an instalment plan): the computed floor and latest date fit a
+# single promise only, so they become hints and the guard keeps out only weekends and holidays
+MULTI = (SPEC.get('confirm_record') or dict()).get('one_promise_per_product') is False
 try:
     today, now_time = parse_now(now_value())
     pf = product_facts(today)
@@ -57,6 +60,8 @@ try:
     for dim, what in (('deadline', 'dates'), ('floor', 'amounts'), ('offers', 'persuasion')):
         if dim in SOFT:
             lines.append('BANK RULE on ' + what + ' (word for word; where it differs from a computed value above, this rule wins): ' + ' | '.join(SOFT[dim]))
+    if MULTI:
+        lines.append('SEVERAL PROMISES FOR ONE PRODUCT are allowed by the bank rules (for example instalments): the FLOOR and LATEST PAYMENT DATE above are for a single promise; for several promises on one product follow the bank rules on them, with one create_promise call per promise.')
     if len(pf) > 1:
         lines.append('There are ' + str(len(pf)) + ' late products, in this order: ' + ', '.join([f['product_id'] + ' ' + f['label'] for f in pf]) + '.')
     vars['facts'] = '\n'.join(lines)
@@ -76,7 +81,7 @@ try:
             if is_business(x):
                 days.append(x.isoformat())
             x = x + datetime.timedelta(days=1)
-        if 'deadline' in SOFT:
+        if 'deadline' in SOFT or MULTI:
             # the computed deadline may be wrong: the guard still keeps weekends and holidays out, nothing more
             days = []
             x = today
@@ -84,7 +89,7 @@ try:
                 if is_business(x):
                     days.append(x.isoformat())
                 x = x + datetime.timedelta(days=1)
-        vars['g_floor_' + key] = str(0 if 'floor' in SOFT else (f.get('floor') or 0))
+        vars['g_floor_' + key] = str(0 if ('floor' in SOFT or MULTI) else (f.get('floor') or 0))
         vars['g_days_' + key] = ';'.join(days)
 except Exception as e:
     vars['facts'] = 'Account facts are unavailable. Say you cannot access the account right now and close the call.'

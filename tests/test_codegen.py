@@ -535,3 +535,16 @@ def test_a_rule_the_code_cannot_express_goes_to_the_model():
     # without soft nothing changes
     hard = facts(p)
     assert "BANK RULE" not in hard["facts"] and hard["g_floor_p1"] == "400" and "2026-11-20" not in hard["g_days_p1"]
+
+
+def test_several_promises_per_product_relax_the_guard():
+    import copy
+    s = copy.deepcopy(SPEC)
+    s["confirm_record"]["one_promise_per_product"] = False
+    p = [{"product_id": "p1", "type": "car_loan", "past_due": 1250, "days_late": 14, "instalment_amount": 400}]
+    v = {"now": NOW, "get_account_response.data.products": json.dumps(p)}
+    code = snippet("facts", libs=("calendar_lib", "dateparse_lib"), SPEC=s)
+    assert "{" not in code and "}" not in code
+    exec(code, {"vars": v})
+    assert "SEVERAL PROMISES FOR ONE PRODUCT" in v["facts"] and v["g_floor_p1"] == "0"
+    assert "2026-11-20" in v["g_days_p1"] and "2026-10-17" not in v["g_days_p1"]
