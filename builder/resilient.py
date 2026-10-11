@@ -14,6 +14,15 @@ def install(log=print, tries=6):
         for attempt in range(tries):
             try:
                 return plain(method, path, body, **params)
+            except (OSError, EOFError) as e:
+                # the connection itself broke (reset, TLS cut off, timeout): seen on 11 Oct, it killed a measurement run.
+                # urllib's URLError, ssl errors, timeouts and http.client's RemoteDisconnected are all OSError.
+                retry = method in ("GET", "PUT") or "/simulations" not in path
+                if not retry or attempt == tries - 1:
+                    raise
+                wait = min(60, 5 * (attempt + 1) ** 2)
+                log(f"Freya {method} {path.split('?')[0]} connection error ({type(e).__name__}); retry {attempt + 1} in {wait} s")
+                time.sleep(wait)
             except RuntimeError as e:
                 msg = str(e)
                 code = next((c for c in ("502", "503", "504") if f"-> {c}:" in msg), None)
