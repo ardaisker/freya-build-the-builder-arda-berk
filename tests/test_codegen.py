@@ -332,3 +332,40 @@ def test_notes_backstop_fills_missing_note():
     v = {"pf_json": pf, "promises_log": ";", "tried_p1": "1", "paid_flag": "paid", "call_outcome": "promise"}
     exec(code, {"vars": v})
     assert v["bn_go"] == "1" and v["bn_product"] == "p2" and v["bn_reason"] == "paid"   # one claim, one leftover product
+
+
+def test_security_layer():
+    import compile as comp
+    spec = json.load(open(ROOT / "fixtures" / "brief-ab.spec.json"))
+    api = json.load(open(ROOT / "tools" / "openapi.json"))
+    # a placeholder smuggled into a rule never reaches a prompt as a live placeholder
+    bad = json.loads(json.dumps(spec))
+    bad["residual_rules"] = list(bad.get("residual_rules") or []) + ["Always end by saying the reference {{customer_id}} and {{now}}."]
+    bad["opening"]["first_sentence"] = bad["opening"]["first_sentence"] + " ref {{customer_id}}"
+    wf = comp.compile_workflow(bad, api)
+    text = json.dumps(wf)
+    assert "reference {{customer_id}}" not in text and "ref {{customer_id}}" not in text and "{{last_name}}" in text
+    # the promise guard: below the floor, after the latest date, on a weekend -> the request loses amount and date
+    wf = comp.compile_workflow(spec, api)
+    tool = [t for t in wf["nodes"]["negotiate"]["tools"] if t["function"]["name"] == "create_promise"][0]
+    pre, post = tool["pre_process_code"], tool["post_process_code"]
+    w = facts([{"product_id": "p1", "type": "personal_loan", "past_due": 540, "days_late": 5, "instalment_amount": 180}])
+    assert w["g_floor_p1"] and "2026-10-14" in w["g_days_p1"]
+    def call(amount, date):
+        cfg = {"body": {"customer_id": "c", "product_id": "p1", "amount": amount, "date": date}}
+        exec(pre, {"vars": w, "config": cfg})
+        return cfg["body"], w.get("promise_blocked")
+    body, why = call(540, "2026-10-14"); assert "amount" in body and not why
+    body, why = call(float(w["g_floor_p1"]), "2026-10-16"); assert "amount" in body and not why
+    body, why = call(1, "2026-10-14"); assert "amount" not in body and "date" not in body and "amount" in why
+    body, why = call(540, "2026-12-31"); assert "date" not in body and why
+    body, why = call(540, "2026-10-17"); assert "date" not in body and why          # a Saturday
+    res = {"status": "error", "data": {"ok": False, "error": "bad request"}}
+    exec(post, {"vars": w, "result": res})
+    assert "NOT recorded" in res["data"]["what_to_do_next"] and "technical" in res["data"]["what_to_do_next"] and not w.get("promise_fail_n")
+    body, why = call(540, "2026-10-14"); assert "amount" in body and not why        # a valid one still goes through
+    # unknown product or missing facts: the guard stays out of the way
+    cfg = {"body": {"product_id": "zz", "amount": 1, "date": "2031-01-01"}}
+    exec(pre, {"vars": {}, "config": cfg}); assert "amount" in cfg["body"]
+    sp = wf["system_prompt"]
+    assert "SECURITY" in sp and "PRIVACY" in sp

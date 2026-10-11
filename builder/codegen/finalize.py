@@ -72,7 +72,7 @@ try:
             outcome, reason = _oc(_case('dispute').get('outcome'))
         elif str(getv('hardship_flag', '')) == 'hardship' or stance == 'hardship':
             outcome, reason = _oc(_case('hardship').get('decline_outcome'))
-        elif _count('create_promise_failure_count') >= 2 and _count('create_promise_success_count') == 0:
+        elif (_count('promise_fail_n') if _count('promise_blocked_n') > 0 else _count('create_promise_failure_count')) >= 2 and _count('create_promise_success_count') == 0:
             outcome, reason = _oc((SPEC.get('confirm_record') or dict()).get('failure_outcome'))
     if not outcome:
         outcome, reason = _oc((SPEC.get('persuasion') or dict()).get('exhausted_outcome'))

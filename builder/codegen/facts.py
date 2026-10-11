@@ -58,6 +58,20 @@ try:
     vars['product_count'] = str(len(pf))
     vars['facts_state'] = 'ok' if pf else 'no_products'
     vars['today_iso'] = today.isoformat()
+    # plain values for the promise guard (the tool hook cannot parse JSON): floor and the allowed payment days per product
+    for f in pf:
+        key = ''.join([ch if ch.isalnum() else '_' for ch in str(f.get('product_id'))])
+        days = []
+        x = today
+        dl = datetime.date.fromisoformat(f['deadline'])
+        for _ in range(120):
+            if x > dl:
+                break
+            if is_business(x):
+                days.append(x.isoformat())
+            x = x + datetime.timedelta(days=1)
+        vars['g_floor_' + key] = str(f.get('floor') or 0)
+        vars['g_days_' + key] = ';'.join(days)
 except Exception as e:
     vars['facts'] = 'Account facts are unavailable. Say you cannot access the account right now and close the call.'
     vars['pf_json'] = '[]'
