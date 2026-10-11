@@ -689,13 +689,14 @@ def run_tool_locally(t, base_url, call_vars, values, timeout=30, examples=None, 
         parsed = json.loads(raw)
     except ValueError:
         parsed = raw
+    raw0 = json.loads(json.dumps(parsed)) if isinstance(parsed, (dict, list)) else parsed
     # the post-hook, as the platform would run it
     result = {"status": "success" if 200 <= status < 300 else "error", "data": parsed, "status_code": status, "header": {}}
     henv = {"result": result, "vars": {"today_iso": str(today or ""), **(other or {})}}
     name, tool = case_tool(t, base_url, call_vars, endings=endings)
     exec(tool["post_process_code"], henv)
     go = henv["vars"].get(name + "_go") or ""
-    return {"url": url, "method": method, "status": status, "body": parsed, "go": go, "say": henv["vars"].get("say_" + go, "") if go else "",
+    return {"url": url, "method": method, "status": status, "body": parsed, "raw": raw0, "go": go, "say": henv["vars"].get("say_" + go, "") if go else "",
             "what_to_do_next": (result.get("data") or {}).get("what_to_do_next") if isinstance(result.get("data"), dict) else None}
 
 

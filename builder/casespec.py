@@ -134,57 +134,138 @@ def extract_case(llm, material_text: str, tool_base_url: str, log=print) -> dict
     return spec
 
 
+EDITS = r"""HOW TO CHANGE THE SPEC: do not write the spec again. Give `edits`, a list applied in order to your spec:
+  {"op": "set", "path": "tools/<tool name>/result_rules", "value": [...]}      replace (or create) the value at the path
+  {"op": "append", "path": "rules", "value": "..."}                             add one item to the end of a list
+  {"op": "insert", "path": "procedure/<step title>", "value": {...}}            add one item to a list BEFORE the named item
+  {"op": "delete", "path": "scenarios/<scenario name>"}                         remove a field or a list item
+A path is the field names joined by "/". An item of a list of objects is named by its `name`, `id` or `title` (exactly as written in the spec); an item of a plain list by its index, counted from 0 in the spec as you were given it. To change several items of a plain list (rules, never) or the order of a list, set the whole list. Change only what must change; an empty list means the spec stays as it is."""
+
 AUDIT = r"""You audit a case spec against the client's material it was written from. A second reader finds what the first one missed.
 
 Check, file by file:
-1. Contradictions between documents: was the right source followed (later decision, newest version, dated change, integration document on technical facts)? List every place where the spec follows an outdated or overruled statement.
+1. Contradictions between documents: was the right source followed (later decision, newest version, dated change, integration document on technical facts)? Find every place where the spec follows an outdated or overruled statement.
 2. Every service: path, method, each field name, enum value, status and error code against the integration document, character by character. Every documented error or business case has a result rule. The test calls match the listed test data.
 3. Every rule, announcement, branch and ending in the material is in the procedure, rules, never, phrases or endings. Nothing in the spec is invented.
 4. Every spoken sentence is in the call language and in the client's wording.
-5. The result rules decide every comparison and calculation; the agent is never asked to calculate.
+5. The result rules and derive entries decide every comparison and calculation and build every announcement that depends on figures; the agent is never asked to calculate, compare or format.
+"""
 
-Answer with one JSON object: {"findings": [{"where": "...", "problem": "...", "source": "file and the sentence that proves it"}], "spec": <the full corrected case spec, or null if nothing needs to change>}"""
+
+def _locate(node, part):
+    """The key or index that `part` names inside a dict or list, or None."""
+    if isinstance(node, dict):
+        return part if part in node else None
+    if isinstance(node, list):
+        for i, x in enumerate(node):
+            if isinstance(x, dict) and any(str(x.get(k) or "").strip() == part.strip() for k in ("name", "id", "title", "topic")):
+                return i
+        for i, x in enumerate(node):
+            if isinstance(x, dict) and any(ident(x.get(k) or "", "") == ident(part, "-") for k in ("name", "id", "title")):
+                return i
+        if part.lstrip("-").isdigit() and -len(node) <= int(part) < len(node):
+            return int(part)
+    return None
+
+
+def apply_edits(spec: dict, edits, log=print) -> dict:
+    """The spec with the model's edits applied. An edit that does not fit is skipped and logged, never fatal."""
+    out = json.loads(json.dumps(spec))
+    done = 0
+    for e in edits if isinstance(edits, list) else []:
+        try:
+            op = str(e.get("op") or "set")
+            parts = [x for x in str(e.get("path") or "").split("/") if x != ""]
+            if not parts:
+                raise ValueError("empty path")
+            node = out
+            walk = parts if op == "append" else parts[:-1]
+            for part in walk:
+                k = _locate(node, part)
+                if k is None:
+                    if isinstance(node, dict) and op in ("set", "append"):
+                        node[part] = [] if (op == "append" and part == walk[-1]) else {}
+                        k = part
+                    else:
+                        raise KeyError(part)
+                node = node[k]
+            if op == "append":
+                if not isinstance(node, list):
+                    raise TypeError("append needs a list")
+                node.append(e.get("value"))
+            else:
+                last = parts[-1]
+                k = _locate(node, last)
+                if op == "set":
+                    if k is None and isinstance(node, list):
+                        node.append(e.get("value"))
+                    else:
+                        node[last if k is None else k] = e.get("value")
+                elif op == "insert":
+                    if not isinstance(node, list):
+                        raise TypeError("insert needs a list")
+                    node.insert(len(node) if k is None else k, e.get("value"))
+                elif op == "delete":
+                    if k is None:
+                        raise KeyError(last)
+                    del node[k]
+                else:
+                    raise ValueError("unknown op " + op)
+            done += 1
+        except Exception as ex:
+            log(f"edit skipped ({type(ex).__name__}: {str(ex)[:80]}): " + json.dumps(e, ensure_ascii=False)[:200])
+    log(f"{done} of {len(edits) if isinstance(edits, list) else 0} edits applied")
+    return out
+
+
+def _take(spec, new, log):
+    """The edited spec if it is at least as sound as the old one."""
+    if isinstance(new, dict) and new.get("procedure") and len(validate(new)) <= len(validate(spec)):
+        return new
+    log("edited spec rejected (it has more problems than before): " + "; ".join(validate(new))[:300] if isinstance(new, dict) else "edited spec rejected")
+    return spec
+
+
+def _context(material_text, tool_base_url, spec):
+    return (user_prompt(material_text, tool_base_url).rsplit("\n\nWrite the case spec now.", 1)[0] + "\n\nYOUR CASE SPEC:\n" + json.dumps(spec, ensure_ascii=False, indent=1))
 
 
 def audit_case(llm, spec: dict, material_text: str, tool_base_url: str, log=print) -> dict:
     try:
-        r = llm.ask_json("audit the case spec against the material", SYSTEM + "\n\n" + AUDIT,
-                         user_prompt(material_text, tool_base_url).rsplit("\n\nWrite the case spec now.", 1)[0] + "\n\nTHE CASE SPEC TO AUDIT:\n" + json.dumps(spec, ensure_ascii=False, indent=1) + "\n\nAnswer with the JSON object described above.")
+        r = llm.ask_json("audit the case spec against the material", SYSTEM + "\n\n" + AUDIT + "\n" + EDITS + '\n\nAnswer with one JSON object: {"findings": [{"where": "...", "problem": "...", "source": "file and the sentence that proves it"}], "edits": [...]}',
+                         _context(material_text, tool_base_url, spec) + "\n\nAnswer with the JSON object described above.")
     except Exception as e:
         log("audit skipped: " + str(e)[:160]); return spec
     for f in (r.get("findings") or [])[:40] if isinstance(r, dict) else []:
         log("audit finding: " + json.dumps(f, ensure_ascii=False)[:400])
-    new = r.get("spec") if isinstance(r, dict) else None
-    if isinstance(new, dict) and new.get("procedure") and len(validate(new)) <= len(validate(spec)):
-        log(f"audit: {len(r.get('findings') or [])} findings, corrected spec taken")
-        return new
-    log(f"audit: {len((r or {}).get('findings') or []) if isinstance(r, dict) else 0} findings, spec unchanged")
-    return spec
+    edits = r.get("edits") if isinstance(r, dict) else None
+    if not edits:
+        log("audit: spec unchanged"); return spec
+    return _take(spec, apply_edits(spec, edits, log), log)
 
 
-REVISE = r"""The agent built from your case spec was tested. Below are the results: the service checks (real calls with the test data) and the test conversations (transcripts with their service calls, and a judge's verdict).
+REVISE = r"""The agent built from your case spec was tested. Below are the results: the service checks (real calls with the client's test data, with the instruction your result rules produced) and the test conversations (transcripts with their service calls, and a platform judge's verdict).
 
-Judge each conversation yourself against the client's material: did the agent do and say what the client's rules require? A judge's "pass" is not proof and a "fail" may be the test's fault.
-Then decide what in the SPEC caused each real failure (a missing or vague step, a result rule that does not cover the case, a wrong path or field, a sentence the agent could not fill in, too much text) and correct the spec. Do not add rules about one test customer: correct the general rule. Keep what works unchanged. Do not make the spec longer than it has to be.
-
-Answer with one JSON object: {"verdicts": [{"name": "...", "pass": true or false, "why": "..."}], "changes": ["what you changed and why"], "spec": <the full corrected case spec, or null if nothing needs to change>}"""
+1. Judge each conversation yourself against the client's material: did the agent do and say what the client's rules require, in the client's wording, with the right figures? A judge's "pass" is not proof and a "fail" may be the test's fault.
+2. Decide what in the SPEC caused each real failure (a missing or vague step, a result rule that does not cover the case or builds the wrong sentence, a wrong path or field, a sentence the agent had to assemble itself, too much text) and correct the spec. Do not add rules about one test customer: correct the general rule. Where the agent had to calculate, compare, format or assemble an announcement, move that into derive and result rules. Keep what works unchanged; do not make the spec longer than it has to be.
+3. This is also your second reading of the material:
+""" + AUDIT.split("Check, file by file:\n", 1)[1]
 
 
 def revise_case(llm, spec: dict, material_text: str, tool_base_url: str, tool_rows: list, conv_rows: list, log=print):
-    results = {"service_checks": [{k: r.get(k) for k in ("tool", "args", "method", "url", "status", "expected_status", "ok", "body")} for r in tool_rows],
+    results = {"service_checks": [{k: r.get(k) for k in ("tool", "args", "status", "expected_status", "ok", "body", "what_to_do_next", "ends_call", "spoken_at_end")} for r in tool_rows],
                "conversations": [{k: r.get(k) for k in ("name", "variables", "expect", "platform_verdict", "platform_reason", "transcript")} for r in conv_rows]}
     try:
-        r = llm.ask_json("judge the test results and revise the case spec", SYSTEM + "\n\n" + REVISE,
-                         user_prompt(material_text, tool_base_url).rsplit("\n\nWrite the case spec now.", 1)[0] + "\n\nYOUR CASE SPEC:\n" + json.dumps(spec, ensure_ascii=False, indent=1) +
-                         "\n\nTEST RESULTS:\n" + json.dumps(results, ensure_ascii=False, indent=1)[:200000] + "\n\nAnswer with the JSON object described above.")
+        r = llm.ask_json("judge the test results and revise the case spec", SYSTEM + "\n\n" + REVISE + "\n" + EDITS + '\n\nAnswer with one JSON object: {"verdicts": [{"name": "...", "pass": true or false, "why": "..."}], "findings": ["what is wrong in the spec and the source that proves it"], "edits": [...]}',
+                         _context(material_text, tool_base_url, spec) + "\n\nTEST RESULTS:\n" + json.dumps(results, ensure_ascii=False, indent=1)[:260000] + "\n\nAnswer with the JSON object described above.")
     except Exception as e:
         log("revision skipped: " + str(e)[:160]); return spec, []
-    verdicts = r.get("verdicts") or [] if isinstance(r, dict) else []
+    verdicts = (r.get("verdicts") or []) if isinstance(r, dict) else []
     for v in verdicts:
         log("builder verdict: " + json.dumps(v, ensure_ascii=False)[:300])
-    for c in (r.get("changes") or [])[:30] if isinstance(r, dict) else []:
-        log("revision: " + str(c)[:300])
-    new = r.get("spec") if isinstance(r, dict) else None
-    if isinstance(new, dict) and new.get("procedure") and len(validate(new)) <= len(validate(spec)):
-        return new, verdicts
-    return spec, verdicts
+    for c in (r.get("findings") or [])[:40] if isinstance(r, dict) else []:
+        log("finding: " + (c if isinstance(c, str) else json.dumps(c, ensure_ascii=False))[:300])
+    edits = r.get("edits") if isinstance(r, dict) else None
+    if not edits:
+        return spec, verdicts
+    return _take(spec, apply_edits(spec, edits, log), log), verdicts

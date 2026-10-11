@@ -31,6 +31,10 @@ def check_tools(spec, base_url, log):
     call_vars = [str(v.get("name")) for v in spec.get("call_variables") or [] if isinstance(v, dict)]
     rows, problems = [], []
     examples = {str(v.get("name")): v.get("example") for v in spec.get("call_variables") or [] if isinstance(v, dict) and v.get("example") not in (None, "")}
+    now = str(examples.get(str(spec.get("now_variable") or "")) or "")
+    today = now[:10] if len(now) >= 10 else ""
+    end_ids = [ident(e.get("id") or e.get("when"), "end") for e in spec.get("endings") or [] if isinstance(e, dict)]
+    other = {}
     for t in spec.get("tools") or []:
         if not isinstance(t, dict) or not t.get("path"):
             continue
@@ -38,18 +42,20 @@ def check_tools(spec, base_url, log):
             if not isinstance(test, dict):
                 continue
             try:
-                r = run_tool_locally(t, base_url, call_vars, test.get("args") or {}, examples=examples)
+                r = run_tool_locally(t, base_url, call_vars, test.get("args") or {}, examples=examples, today=today, endings=end_ids, other=other)
+                if 200 <= int(r["status"]) < 300:           # later services may read this answer (rules with @service paths)
+                    other[ident(t.get("name")) + "_json"] = json.dumps(r["raw"], ensure_ascii=False)
             except Exception as e:
-                r = {"url": str(t.get("path")), "method": str(t.get("method")), "status": 0, "body": type(e).__name__ + ": " + str(e)[:200], "what_to_do_next": None}
+                r = {"url": str(t.get("path")), "method": str(t.get("method")), "status": 0, "body": type(e).__name__ + ": " + str(e)[:200], "what_to_do_next": None, "raw": None}
             want = test.get("expect_status")
             ok = (want is None or int(want) == int(r["status"])) and r["status"] != 0
             contains = str(test.get("expect_contains") or "")
             if ok and contains and contains.lower() not in json.dumps(r["body"], ensure_ascii=False).lower():
                 ok = False
             row = {"tool": ident(t.get("name")), "args": test.get("args") or {}, "method": r["method"], "url": r["url"], "status": r["status"], "expected_status": want,
-                   "expected_contains": contains, "ok": ok, "body": json.dumps(r["body"], ensure_ascii=False)[:1500], "what_to_do_next": r["what_to_do_next"]}
+                   "expected_contains": contains, "ok": ok, "body": json.dumps(r["body"], ensure_ascii=False)[:1500], "what_to_do_next": r["what_to_do_next"], "ends_call": r.get("go") or "", "spoken_at_end": r.get("say") or ""}
             rows.append(row)
-            log(f"TEST service {row['tool']} {row['method']} {row['url']} -> {row['status']} (expected {want}) {'ok' if ok else 'MISMATCH'}  {row['body'][:140]}")
+            log(f"TEST service {row['tool']} {json.dumps(row['args'], ensure_ascii=False)[:120]} -> {row['status']} (expected {want}) {'ok' if ok else 'MISMATCH'}  " + (f"ENDS THE CALL ({row['ends_call']}): {row['spoken_at_end']}" if row["ends_call"] else "agent is told: " + str(row["what_to_do_next"]))[:420])
             if not ok:
                 problems.append(row)
     return rows, problems

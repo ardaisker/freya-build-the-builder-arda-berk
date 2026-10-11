@@ -8,7 +8,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "builder"))
 
 import casecompile as cc  # noqa: E402
-from casespec import validate  # noqa: E402
+from casespec import apply_edits, validate  # noqa: E402
 from lint import lint  # noqa: E402
 
 SPEC = json.loads((ROOT / "fixtures" / "case-parcel.spec.json").read_text())
@@ -171,3 +171,21 @@ def test_a_rule_can_read_another_services_answer():
     result = {"status": "success", "status_code": 200, "data": {}}
     exec(tool["post_process_code"], {"result": result, "vars": {}})
     assert result["data"]["what_to_do_next"] == "One."
+
+
+def test_edits_change_only_what_they_name():
+    spec = json.loads(json.dumps(SPEC))
+    out = apply_edits(spec, [
+        {"op": "set", "path": "tools/get_parcel/result_rules", "value": [{"status": "ok", "then": "new"}]},
+        {"op": "set", "path": "tools/book_redelivery/timeout_seconds", "value": 20},
+        {"op": "append", "path": "rules", "value": "one more"},
+        {"op": "insert", "path": "procedure/Second attempt", "value": {"title": "Between", "do": "x"}},
+        {"op": "delete", "path": "endings/to_person"},
+        {"op": "set", "path": "procedure/Find the parcel/do", "value": "changed"},
+        {"op": "set", "path": "nowhere/deep/thing", "value": 1},
+        {"op": "delete", "path": "tools/no_such_tool"},
+    ], log=lambda line: None)
+    assert out["tools"][1]["result_rules"] == [{"status": "ok", "then": "new"}] and out["tools"][2]["timeout_seconds"] == 20
+    assert out["rules"][-1] == "one more" and [p["title"] for p in out["procedure"]] == ["Find the parcel", "Between", "Second attempt"]
+    assert [e["id"] for e in out["endings"]] == ["finished"] and out["procedure"][0]["do"] == "changed" and out["nowhere"] == {"deep": {"thing": 1}}
+    assert spec == SPEC and out["tools"][0] == SPEC["tools"][0]          # the original is untouched, the rest unchanged

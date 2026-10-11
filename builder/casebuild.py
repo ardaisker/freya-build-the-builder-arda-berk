@@ -63,7 +63,9 @@ def build_case(a, paths, trace, llm, ROOT, slot, deadline):
         trace.log(f"spec loaded from {a.spec} (no model call)")
     else:
         spec = extract_case(llm, text, base_url, log=trace.log)
-        if not a.no_audit:
+        can_test = bool(base_url) and bool(spec.get("scenarios")) and not a.no_freya and int(a.max_test_rounds) > 0
+        if not a.no_audit and not can_test:
+            # with test conversations the second reading happens together with the judging of the tests (step 6b)
             trace.section("2b AUDIT: a second reading of the material against the spec")
             spec = audit_case(llm, spec, text, base_url, log=trace.log)
     for d in spec.get("decisions") or []:
@@ -127,44 +129,54 @@ def build_case(a, paths, trace, llm, ROOT, slot, deadline):
     except Exception as e:
         trace.test("smoke chat turn", "FAILED: " + str(e)[:300])
 
-    # 6. the material's test conversations, judged by the builder's model; the spec is revised from them
+    # 6. the material's test conversations are played against the agent; the builder's model judges them, reads the
+    #    material a second time and edits the spec; the edited version is published and replayed; the better one stays
     best = {"spec": spec, "passed": -1, "total": 0, "tag": "v1"}
     current, tag = spec, "v1"
     rounds = max(0, int(a.max_test_rounds))
     for rnd in range(1, rounds + 1):
         if not base_url or not (current.get("scenarios") or []):
             trace.log("no test conversations to play"); break
-        if left() < 8:
+        if left() < 3.5:
             trace.log(f"test round {rnd} skipped: {left():.1f} min left"); break
         trace.section(f"6 TEST round {rnd}: the material's test conversations against the agent ({tag})")
         try:
-            conv = run_scenarios(saved["agent_id"], current, trace.log, ROOT / ".personas-case.json", max_seconds=300)
+            conv = run_scenarios(saved["agent_id"], current, trace.log, ROOT / ".personas-case.json", max_seconds=240)
         except Exception as e:
             trace.test(f"round {rnd}", "FAILED to run: " + str(e)[:300]); break
         (out_dir / f"test-{rnd}.json").write_text(json.dumps(conv, indent=1, ensure_ascii=False))
-        if a.spec or left() < 5:
-            passed = sum(1 for c in conv if c.get("platform_verdict") == "pass")
-            trace.test(f"round {rnd}", f"{passed} / {len(conv)} passed (platform judge only)")
-            if passed > best["passed"]:
-                best = {"spec": current, "passed": passed, "total": len(conv), "tag": tag}
-            break
-        trace.section(f"6b JUDGE + REVISE round {rnd}")
-        new, verdicts = revise_case(llm, current, text, base_url, tool_rows, conv, log=trace.log)
-        passed = sum(1 for v in verdicts if isinstance(v, dict) and v.get("pass") is True) if verdicts else sum(1 for c in conv if c.get("platform_verdict") == "pass")
-        trace.test(f"round {rnd}", f"{passed} / {len(conv)} test conversations passed for version {tag}")
-        if passed > best["passed"]:
+        passed = sum(1 for c in conv if c.get("platform_verdict") == "pass")
+        trace.test(f"round {rnd}", f"{passed} / {len(conv)} test conversations passed the platform judge for version {tag}")
+        if passed >= best["passed"]:            # a tie goes to the later version: it carries the second reading's corrections
             best = {"spec": current, "passed": passed, "total": len(conv), "tag": tag}
-        if new is current or passed == len(conv) or rnd == rounds:
+        else:
+            trace.log(f"version {tag} did worse than {best['tag']} ({passed} < {best['passed']}): going back")
+            break
+        if a.spec or rnd == rounds or passed == len(conv) and rnd > 1:
             break
         if left() < 9:
-            trace.log("no time to publish and replay a revision"); break
+            trace.log(f"no time for a revision ({left():.1f} min left)"); break
+        trace.section(f"6b JUDGE + SECOND READING + REVISE round {rnd}")
+        new, verdicts = revise_case(llm, current, text, base_url, tool_rows, conv, log=trace.log)
+        if verdicts:
+            trace.test(f"round {rnd}, builder's own verdicts", f"{sum(1 for v in verdicts if isinstance(v, dict) and v.get('pass') is True)} / {len(verdicts)} for version {tag}")
+        if new is current:
+            trace.log("the revision changed nothing"); break
+        if left() < 1.5:
+            trace.log("no time to publish the revision"); break
         current, tag = new, f"v{rnd + 1}"
         (out_dir / f"spec-{tag}.json").write_text(json.dumps(current, indent=1, ensure_ascii=False))
+        if base_url:
+            rows2, bad2 = check_tools(current, base_url, lambda line: None)
+            trace.test(f"service checks for {tag}", f"{len(rows2) - len(bad2)} / {len(rows2)} as the material says")
+            tool_rows = rows2
         wf, saved = publish(current, tag)
-    if best["passed"] >= 0 and best["spec"] is not current:
-        trace.log(f"version {best['tag']} scored best ({best['passed']} / {best['total']}): republishing it")
+        if rnd + 1 > rounds or left() < 3.5:      # published but not replayed: it still carries the corrections of the second reading
+            best = {"spec": current, "passed": best["passed"], "total": best["total"], "tag": tag + " (not replayed)"}
+    if best["spec"] is not current:
+        trace.log(f"version {best['tag']} stays ({best['passed']} / {best['total']}): republishing it")
         wf, saved = publish(best["spec"], "best")
-    (out_dir / "spec-final.json").write_text(json.dumps(best["spec"] if best["passed"] >= 0 else current, indent=1, ensure_ascii=False))
+    (out_dir / "spec-final.json").write_text(json.dumps(best["spec"], indent=1, ensure_ascii=False))
 
     trace.section("7 EXPORT")
     sub = ROOT / "submission"; sub.mkdir(exist_ok=True)
