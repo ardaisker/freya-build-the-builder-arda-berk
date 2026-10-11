@@ -122,3 +122,11 @@ Plan dosyası: `~/.claude/plans/inherited-swimming-horizon.md` (fazlar, eşikler
   `submission.json` yaz (team arda-berk, repo https://github.com/ardaisker/freya-build-the-builder-arda-berk, commit,
   run_command, mock_url), commit + push; Arda repoyu public yapar ve Yavuz'un mailine 3 ekle yanıt verir (23:00).
 - Claude: 21:31'de haftalık %72, 5 saatlik %41. Yeni builder koşusu başlatma (3 final koşusu yeter).
+
+## 11 Eki 22:36: TESLİM ADAYI SEÇİLDİ
+
+- Teslim: `submission.json` + `submission/final.workflow.json` + `traces/final.log` (commit 573a8df; builder kodu d7c4bff).
+  Ajan: final-b spec'i, iki yönlendirme düzeltmesinden sonra yeniden derlendi (slot final-b2, agent 6e02e9ef…).
+- Ortak 25 konuşmada: b2 22/25, d 21/25, e 20/25 (d ve e düzeltmelerden sonraki taze tam koşular, kendi testlerinde 16/16).
+- Mock: https://freya-bank-mock.ardaegeisker.workers.dev (sonuçlar açıklanana kadar açık kalmalı).
+- Arda: repoyu public yap, Yavuz'un mailine 3 ekle yanıt ver (23:00 son).
