@@ -67,3 +67,42 @@ python3 builder/build.py briefs/hidden-2.md briefs/hidden-2.openapi.json --slot 
 
 Without `--cases` no practice simulation runs (a hidden brief has none): extract, audit, compile, self-check, lint,
 dry run, save, one smoke turn, export. Fill `submission/FORM-TEMPLATE.json`, commit, push, send.
+
+## The final case: a folder of client material, not a brief
+
+The final case is a different kind of call with different services, described by a folder of documents that contradict
+each other. The builder has a second road for that; the collection road above is unchanged and still used whenever the
+input brings the kit's tool API.
+
+    python3 builder/build.py <case folder> --tool-url <base address of the services> --max-test-rounds 3
+
+What it does, every step in the trace:
+
+1. **Read** every file of the folder (`casefolder.py`): text, mail, PDF, Word, Excel, zip. A very large data file is
+   abridged so that its shapes stay exact.
+2. **Case spec** (`casespec.py`, the builder's model): services (path, fields, test calls), the procedure, the exact
+   sentences, the ways a call ends, and test conversations. Every contradiction between documents is decided and
+   logged with its sources ("decision on a contradiction" lines in the trace).
+3. **Service check** (`casetest.py`): every service is called with the client's own test data; the trace shows the
+   status and what the agent would be told.
+4. **Compile** (`casecompile.py`, code only): setup -> services read before the first word -> one conversation node ->
+   endings. Around every service call sits code, not the phone model:
+   - the request is built by code (nested fields, path/query, types); a value copied from an earlier answer is repaired;
+   - `derive`: differences, comparisons, days to a date, amounts/dates/digits as they are spoken, spoken lists,
+     duplicates in a list;
+   - `result_rules`: code picks, or composes from parts, the exact sentence the agent says next;
+   - a result that alone ends the call ends it by code with the client's sentence;
+   - error answers are routed by the engine (the platform runs no hook on an HTTP error);
+   - look-alike records (same name, same last digits) are told apart by code from the digits the caller said: until
+     exactly one record fits, nothing is read and the agent is told which question to ask.
+5. **Test conversations** are played on Freya against the published agent; the builder's model judges them, reads the
+   material a second time, and edits the spec (small edits, not a rewrite); the new version is published and replayed;
+   the better version stays.
+6. **Export.**
+
+Nothing in `builder/` names a service, a field, a sentence or a value of any case; `builder/leakcheck.py` compares the
+lines added since the `pre-reveal` tag with the final pack (what it still lists are ordinary English words).
+`tests/test_case.py` tests this road on made-up data.
+
+The mock of the client's services lives in `mock/` (a Cloudflare Worker). It is written by hand as the task asks, serves
+the pack's test answers word for word (`mock/check_mock.py` compares all of them) and is not part of the builder.
