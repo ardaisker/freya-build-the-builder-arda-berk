@@ -235,6 +235,7 @@ def test_look_alike_records_are_told_apart_by_code():
     assert n("310000******6839", "9991") == ("none", [])                                                # digits that fit no record
     assert n("310000******6839", "6839" + "126839" + "3100901234566839") == ("one", ["310090******6839"])   # answers joined by mistake: the last whole number counts
     assert n("310000******6839", "31009000123456" + "6839") == ("one", ["310090******6839"])            # a digit doubled while writing the number down
+    assert n("310000******6839", "310090" + "6839") == ("one", ["310090******6839"])                    # only the visible parts of the number were said
     assert e["narrow"]("x", "6839", recs[:1], "id", "kind")[0] == "ok"                                  # a single record is never held back
 
 
