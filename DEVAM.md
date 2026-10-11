@@ -68,3 +68,12 @@ Sonra: `submission/hidden-*.workflow.json` + trace'ler commit + push; `submissio
 - Geri arama: pencere dışı gün ya da saat tek başına "başarısız öneri" sayılır; "tonight" bugündür.
 - Koşan kuyruk: `results/n6-*` (B × 8, A × 3 iki ajanda, uç durumlar düz × 2 + corrects/asks_back/pieces).
 - Kredi 04:31'de 334; yedek 100.
+
+## 11 Eki 08:45: KOD DONDURULDU (commit 6a821ec + bu not)
+
+- Son ölçüm (n8, son sürüm): Brief A 10/10 × 3 (iki ajanda da), Brief B 3/3 × 5, 42 uç durum düz 42/42 × 2, corrects stili 39/42.
+- Canlı uçtan uca prova: `build.py briefs/brief-a.md briefs/brief-b.md tools/openapi.json --slot rehearsal` 93 saniyede bitti (okuma, denetim, derleme, kayıt, duman testi, dışa aktarım).
+- Sunucuda temiz çekimle: 17 test geçti, çevrimdışı derlemeler tamam.
+- Platform notu: 05:52'de bir simülasyon "running" kaldı ve yuvayı iki saat kilitledi; `resilient._clear_stale` artık 25 dakikadan eski takılı simülasyonu kapatıyor. "conversation: no verdict" hakem arızasıdır, ajan kusuru değil.
+- Bundan sonra yalnız çökme düzeltmesi. Gizli brief'ten hiçbir kural, değer ya da isim koda yazılmaz.
+- Kredi 08:42'de 299; yedek 100.
