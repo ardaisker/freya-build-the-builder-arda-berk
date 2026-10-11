@@ -36,12 +36,12 @@ def test_unset_placeholder_is_not_sent():
 
 def test_derive_and_rules():
     e = env(cc.RESULT_LIB)
-    d = {"total": "1250.50", "paid": 250, "due": "2026-03-10", "items": [{"no": "1234567890", "amt": 5}, {"no": "0000001111", "amt": 0}]}
+    d = {"total": "1250.50", "paid": 250, "due": "2026-03-10", "items": [{"no": "1234567890", "amt": 5}, {"no": "0000002468", "amt": 0}]}
     e["derive"]([{"name": "left", "op": "sub", "a": "total", "b": "paid"}, {"name": "left_text", "op": "format_number", "a": "computed.left", "decimal": ",", "thousands": "."},
                  {"name": "days", "op": "days_from_today", "a": "due"}, {"name": "due_text", "op": "format_date", "a": "due", "pattern": "D MMMM YYYY", "months": ["m" + str(i) for i in range(1, 13)]},
                  {"name": "vs", "op": "compare", "a": "paid", "b": 300}, {"name": "tail", "op": "last_chars", "a": "no", "b": 4, "each": "items"}], d, datetime.date(2026, 3, 2))
     assert d["computed"] == {"left": 1000.5, "left_text": "1.000,50", "days": 8, "due_text": "10 m3 2026", "vs": "less"}
-    assert [i["computed"]["tail"] for i in d["items"]] == ["7890", "1111"]
+    assert [i["computed"]["tail"] for i in d["items"]] == ["7890", "2468"]
     rules = [{"status": "ok", "when": [{"path": "items", "op": "count_gt", "value": 1}, {"path": "computed.vs", "op": "eq", "value": "less"}], "then": "Say [[computed.left_text]] by [[computed.due_text]], first [[items.0.computed.tail]]."},
              {"status": 404, "then": "not found"}, {"status": "error", "then": "failed"}]
     assert e["guidance"](rules, 200, d, "ok", "err")[0] == "Say 1.000,50 by 10 m3 2026, first 7890."
@@ -72,9 +72,9 @@ def test_post_hook_runs_like_the_platform():
     v = {"today_iso": "2026-01-05"}
     exec(tool["post_process_code"], {"result": result, "vars": v})
     assert "header" not in result and result["data"]["what_to_do_next"] == "past" and v["t_state"] == "ok" and json.loads(v["t_result"])["computed"]["d"] == -4
-    result = {"status": "error", "status_code": 500, "data": "oops"}
+    result = {"status": "error", "status_code": 500, "data": "broken"}
     exec(tool["post_process_code"], {"result": result, "vars": {}})
-    assert result["data"]["result"] == "oops" and "NOT work" in result["data"]["what_to_do_next"]
+    assert result["data"]["result"] == "broken" and "NOT work" in result["data"]["what_to_do_next"]
 
 
 def test_a_broken_spec_still_compiles():
@@ -111,18 +111,18 @@ def test_rules_can_add_up():
 
 def test_whole_numbers_drop_their_decimals_when_asked():
     e = env(cc.RESULT_LIB)
-    d = {"x": 12000.0, "y": 85.2}
+    d = {"x": 31000.0, "y": 47.3}
     e["derive"]([{"name": "x", "op": "format_number", "a": "x", "decimal": ",", "thousands": ".", "trim": True}, {"name": "y", "op": "format_number", "a": "y", "decimal": ",", "thousands": ".", "trim": True}], d, None)
-    assert d["computed"] == {"x": "12.000", "y": "85,20"}
+    assert d["computed"] == {"x": "31.000", "y": "47,30"}
 
 
 def test_a_copied_value_is_snapped_to_the_real_one():
     e = env(cc.ROUTE_LIB)
-    cands = e["collect"]({"items": [{"id": "AB00**77"}, {"id": "AB01**77"}, {"id": "AB00**12"}]}, "items.*.id")
-    assert cands == ["AB00**77", "AB01**77", "AB00**12"]
-    assert e["snap"]("AB00**12", cands) == "AB00**12"
-    assert e["snap"]("AB00 ****** 12", cands) == "AB00**12"          # mask and spacing differ
-    assert e["snap"]("0012", cands) == "AB00**12"                    # only the tail, and it is unique
+    cands = e["collect"]({"items": [{"id": "AB00**77"}, {"id": "AB01**77"}, {"id": "AB00**58"}]}, "items.*.id")
+    assert cands == ["AB00**77", "AB01**77", "AB00**58"]
+    assert e["snap"]("AB00**58", cands) == "AB00**58"
+    assert e["snap"]("AB00 ****** 58", cands) == "AB00**58"          # mask and spacing differ
+    assert e["snap"]("0058", cands) == "AB00**58"                    # only the tail, and it is unique
     assert e["snap"]("77", cands) == "77"                            # ambiguous or too short: left alone
     _, tool = cc.case_tool({"name": "t2", "path": "/p", "method": "POST", "params": [{"name": "box.id", "in": "body", "source": "model", "from_result": {"tool": "t1", "path": "items.*.id"}}], "result_rules": []}, "https://x.test", [])
     config = {"body": {"box_id": "AB01 **77"}, "headers": {}}
@@ -143,7 +143,7 @@ def test_large_data_files_are_abridged_for_the_model():
 
 def test_spoken_amounts_digits_and_lists():
     e = env(cc.RESULT_LIB)
-    d = {"a": 2500.0, "b": 7666.5, "c": 1234567.89, "tail": "1003", "x": {"owes": 0}, "y": {"owes": 5}, "z": {"owes": 0}}
+    d = {"a": 3170.0, "b": 9321.5, "c": 2345678.91, "tail": "7006", "x": {"owes": 0}, "y": {"owes": 5}, "z": {"owes": 0}}
     e["derive"]([{"name": "a", "op": "amount_text", "a": "a", "unit": "krone", "subunit": "ore", "thousands": "."},
                  {"name": "b", "op": "amount_text", "a": "b", "unit": "krone", "subunit": "ore", "thousands": "."},
                  {"name": "c", "op": "amount_text", "a": "c", "unit": "krone", "subunit": "ore", "thousands": "."},
@@ -151,11 +151,11 @@ def test_spoken_amounts_digits_and_lists():
                  {"name": "clear", "op": "join_if", "sep": ", ", "last_sep": " og ", "items": [{"when": [{"path": "x.owes", "op": "le", "value": 0}], "text": "X"}, {"when": [{"path": "y.owes", "op": "le", "value": 0}], "text": "Y"},
                                                                                              {"when": [{"path": "z.owes", "op": "le", "value": 0}], "text": "Z"}, {"when": [{"path": "w", "op": "present"}, {"path": "w.owes", "op": "le", "value": 0}], "text": "W"}]},
                  {"name": "case", "op": "first_of", "default": "none", "items": [{"when": [{"path": "y.owes", "op": "gt", "value": 9}], "text": "big"}, {"when": [{"path": "y.owes", "op": "gt", "value": 0}], "text": "small [[y.owes]]"}]}], d, None)
-    assert d["computed"] == {"a": "2.500 krone", "b": "7.666 krone 50 ore", "c": "1.234.567 krone 89 ore", "tail": "en nul nul tre", "clear": "X og Z", "case": "small 5"}
+    assert d["computed"] == {"a": "3.170 krone", "b": "9.321 krone 50 ore", "c": "2.345.678 krone 91 ore", "tail": "syv nul nul seks", "clear": "X og Z", "case": "small 5"}
 
 
 def test_a_masked_value_is_matched_position_by_position():
     e = env(cc.ROUTE_LIB)
-    cands = ["AB0000******4253", "AB0010******4253"]
-    assert e["snap"]("AB00101234564253", cands) == "AB0010******4253"
-    assert e["snap"]("AB00 0000 0000 4253", cands) == "AB0000******4253"
+    cands = ["AB0000******6839", "AB0090******6839"]
+    assert e["snap"]("AB00901234566839", cands) == "AB0090******6839"
+    assert e["snap"]("AB00 0000 0000 6839", cands) == "AB0000******6839"
