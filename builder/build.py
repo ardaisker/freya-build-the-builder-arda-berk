@@ -121,6 +121,16 @@ def self_check(spec, openapi, wf, trace):
     return ok == total and not bad
 
 
+def fits_collection(api_path) -> bool:
+    """True when the tool API file brings the tools the fixed collection topology is built on."""
+    try:
+        doc = json.load(open(api_path))
+        names = {p.strip("/").split("/")[-1] for p in (doc.get("paths") or {})}
+        return {"verify_identity", "get_account", "create_promise", "close_call"} <= names
+    except Exception:
+        return False
+
+
 def slug(path: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", pathlib.Path(path).stem.lower()).strip("-")
 
@@ -137,12 +147,23 @@ def main():
     ap.add_argument("--no-freya", action="store_true", help="stop after lint (offline)")
     ap.add_argument("--no-audit", action="store_true", help="skip the second model pass that checks the spec against the brief")
     ap.add_argument("--no-oracle", action="store_true", help="skip the independent test situations that check the code steps against the brief")
+    ap.add_argument("--tool-url", default="", help="base address of the case's services, for a case folder that brings no tool API file of the collection kind")
     a = ap.parse_args()
     t_start = time.time()
     deadline = t_start + a.budget_min * 60
 
     briefs, apis = classify(a.files)
-    if not briefs or len(apis) != 1:
+    if a.tool_url or len(apis) != 1 or not fits_collection(apis[0]):
+        # not a collection call with the kit's tool API: the case-folder road reads everything and builds from that
+        from casebuild import build_case
+        slot = a.slot or ("team-" + "-".join(slug(f) for f in a.files))[:60]
+        trace = Trace(ROOT / "traces" / f"{slot}-{time.strftime('%Y%m%d-%H%M%S')}.log")
+        trace.section(f"BUILD START (case folder) slot={slot} input={a.files} budget={a.budget_min}min")
+        trace.log("command: " + " ".join(sys.argv))
+        llm = LLM(trace=trace)
+        trace.log(f"model backend={llm.backend} model={llm.model}")
+        return build_case(a, a.files, trace, llm, ROOT, slot, deadline)
+    if not briefs:
         sys.exit("give the brief (one or more text files, or a folder of them) and exactly one tool API file")
     slot = a.slot or ("team-" + "-".join(slug(b) for b in briefs))[:60]   # own prefix: never the kit example's slot
     out_dir = ROOT / "out" / slot

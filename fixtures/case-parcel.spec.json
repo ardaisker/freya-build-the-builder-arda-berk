@@ -1,0 +1,31 @@
+{
+ "language": "English",
+ "agent_role": "You are the voice assistant of a courier's parcel line.",
+ "call_variables": [{"name": "memberId", "meaning": "member number from the phone menu", "example": "M-1001"}, {"name": "callTime", "meaning": "date and time of the call", "example": "2026-03-02T09:15:00+00:00"}],
+ "now_variable": "callTime",
+ "decisions": [],
+ "tools": [
+  {"name": "get_member", "purpose": "Reads the member and their parcels.", "method": "GET", "path": "/_echo/members/{memberId}", "at_start": true,
+   "params": [{"name": "memberId", "in": "path", "type": "string", "source": "variable:memberId"}],
+   "result_rules": [{"status": "ok", "when": [{"path": "echo", "op": "eq", "value": true}], "then": "The member was found at [[path]]. Ask which parcel the caller means."}], "tests": [{"args": {}, "expect_status": 200}]},
+  {"name": "get_parcel", "purpose": "Reads one parcel.", "call_when": "CALL it every time the caller gives a tracking number.", "method": "GET", "path": "/_echo/parcels/{trackingNo}",
+   "params": [{"name": "trackingNo", "in": "path", "type": "string", "source": "model", "description": "Tracking number, as the caller said it"}, {"name": "detail", "in": "query", "source": "const:full"}],
+   "result_rules": [{"status": "ok", "then": "Tell the caller the parcel [[path]] is on its way and ask whether they want a second delivery attempt."}], "tests": [{"args": {"trackingNo": "TR 55"}, "expect_status": 200}]},
+  {"name": "book_redelivery", "purpose": "Books a second delivery attempt.", "call_when": "CALL it when the caller picked a weekday for a second attempt.", "method": "POST", "path": "/_echo/redelivery",
+   "params": [{"name": "memberId", "in": "body", "source": "variable:memberId"}, {"name": "trackingNo", "in": "body", "source": "model", "description": "Tracking number"}, {"name": "day", "in": "body", "source": "model", "description": "The date, YYYY-MM-DD"}, {"name": "attempts", "in": "body", "type": "integer", "source": "const:2"}],
+   "result_rules": [{"status": "ok", "then": "Say the second attempt is booked for the day you sent."}, {"status": "error", "then": "Say the booking did not work and offer a person."}], "tests": [{"args": {"trackingNo": "TR55", "day": "2026-03-04"}, "expect_status": 200}]}
+ ],
+ "opening": {"text": "Hello, this is the parcel line."},
+ "procedure": [
+  {"title": "Find the parcel", "do": "Ask for the tracking number and call get_parcel."},
+  {"title": "Second attempt", "do": "If the caller wants one, ask for a weekday within the next seven days, read its date from the calendar and call book_redelivery."}
+ ],
+ "rules": ["A refund is never promised by the assistant."],
+ "never": ["Never give another member's parcel information."],
+ "phrases": [{"when": "after a booking", "text": "Your second delivery attempt is booked for [day]."}],
+ "endings": [
+  {"id": "finished", "when": "The caller needs nothing else.", "say": "Thank you for calling. Goodbye.", "default": true},
+  {"id": "to_person", "when": "The caller asks for a refund or for a person.", "say": "I am handing you over to a colleague now."}
+ ],
+ "scenarios": [{"name": "second attempt", "variables": {"memberId": "M-1001", "callTime": "2026-03-02T09:15:00+00:00"}, "customer": "You want to know where parcel TR55 is and then ask for a second delivery on Wednesday. After that you need nothing else.", "expect": ["The agent called get_parcel with TR55", "The agent booked the second attempt for 2026-03-04", "The call ended with the thank-you sentence"]}]
+}

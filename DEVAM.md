@@ -91,3 +91,18 @@ Plan dosyası: `~/.claude/plans/inherited-swimming-horizon.md` (fazlar, eşikler
   - Pratik kapı: `python3 -u builder/gate.py add78035-6e92-4483-83b8-86c3c4f7a0f0 --brief B --reps 3` / `--brief A --reps 2` (önce `builder/savetest.py` ile yayınla).
 - **Claude eşikleri (haftalık):** %85 Opus alt ajan yok, %90 alt ajan yok, %94 yeniden koşu yok, %98 asla. 19:26'da %68; dört builder koşusu haftalıkta 1 puandan az tuttu. 5 saatlik pencere 19:30'da sıfırlandı.
 - Zaman: 20:00 açılış → 20:30 güvenli teslim commit'i → 22:00 kod dondurma → 22:30 son koşular seçildi → 22:45 teslim (Arda: repo public + form).
+
+## 11 Eki 20:35: FİNAL GÖREVİ DEĞİŞTİ (kredi kartı ekstre borcu, Türkçe, kendi mock'umuz)
+
+- Final vakası tahsilat değil: `briefs/final/BRIEF.md`. Paket parça parça geliyor (Drive klasörü
+  `1r9KOek3SXiE0mu1wBofezD0bjiAJhcYQ`; 20:35'te yalnız BRIEF.md + akış PDF'i vardı).
+- Teslim: Yavuz'un mailine yanıt, 3 ek: `submission.json`, dışa aktarılan workflow, builder izi. 23:00 son.
+- Mock: `mock/` (Cloudflare Worker `freya-bank-mock`, adres https://freya-bank-mock.ardaegeisker.workers.dev,
+  `cd mock && npx wrangler deploy`). Şu an yankı iskeleti; servis dokümanı gelince gerçek uçlar yazılacak.
+- Builder'a ikinci yol eklendi (vaka klasörü): `python3 builder/build.py <klasör> --tool-url <mock adresi>`.
+  Dosyalar: `builder/casefolder.py` (her dosyayı okur), `casespec.py` (model: malzeme -> vaka spec'i, denetim, test
+  sonucundan düzeltme), `casecompile.py` (spec -> workflow; servis çağrısı kancaları, kodla hesap `derive`, sonuç
+  kuralları, kodla kapanış `go`), `casetest.py` (servis kontrolleri + test konuşmaları), `casebuild.py` (akış).
+  Eski tahsilat yolu aynen duruyor (tool API dosyasında yedi araç varsa o çalışır).
+- Uydurma vaka: `fixtures/case-parcel/` + `fixtures/case-parcel.spec.json`; testler `tests/test_case.py`.
+- Koda final vakasından hiçbir şey yazılmaz; mock (`mock/`) vakaya özeldir ve builder'ın parçası değildir.
