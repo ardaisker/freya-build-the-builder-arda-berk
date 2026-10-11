@@ -1,0 +1,518 @@
+{
+ "_doc": "Validator note: the values flagged as invalid are left unchanged. Every 'outcome' value is the close_call result (API body property 'result'). Its allowed values are arrangement, claims_paid, routed, no_arrangement, unverified, no_contact. Every 'reason' value is from close_call.result_reason. The check compared outcomes against the result_reason list by mistake. Swapping in reason values would make close_call send results the API does not accept.",
+ "bank_name": "Kestrel Business Finance",
+ "agent_self_name": "virtual assistant",
+ "language": "English",
+ "opening": {
+  "first_sentence": "Hello, this is Kestrel Business Finance's virtual assistant. Calls are recorded for quality.",
+  "confirm_question": "Am I speaking with {{first_name}} {{last_name}} from {{company_name}}?",
+  "confirmation_rule": "A clear yes or the contact saying their own name confirms. Anything else is unclear: ask once more. After the second unclear answer, close as no_contact / unconfirmed.",
+  "forbidden_before_verification": [
+   "arrears",
+   "balances",
+   "payment",
+   "any facility"
+  ],
+  "ai_question_answer": "I am Kestrel's virtual assistant.",
+  "scam_question_answer": "You can call us back on the number on your Kestrel statement.",
+  "unclear_outcome": {
+   "outcome": "no_contact",
+   "reason": "unconfirmed"
+  },
+  "max_asks": 2
+ },
+ "third_party": {
+  "rules": "Do not explain the call. Ask when the contact can be reached.",
+  "callback": {
+   "allowed_days": "any_business_day_within_N",
+   "max_days_ahead": 0,
+   "from": "",
+   "to": "18:00",
+   "must_be_after_now": true,
+   "ask_again_once": false,
+   "ok_outcome": {
+    "outcome": "no_contact",
+    "reason": "callback_booked"
+   },
+   "fail_outcome": {
+    "outcome": "no_contact",
+    "reason": "no_slot"
+   },
+   "include_today": "true"
+  },
+  "wrong_number": {
+   "outcome": "no_contact",
+   "reason": "wrong_number"
+  },
+  "deceased": {
+   "say": "Thank you for letting us know.",
+   "outcome": {
+    "outcome": "no_contact",
+    "reason": "ceased_trading"
+   }
+  },
+  "relative_rule": "Do not explain the call to anyone other than the contact."
+ },
+ "identity": {
+  "questions": [
+   {
+    "field": "company_number",
+    "ask": "Please tell me your company registration number.",
+    "answer_format": "8 characters, letters in capitals, no spaces",
+    "notes": "Remove spaces and change letters to capitals before sending."
+   },
+   {
+    "field": "founded_year",
+    "ask": "In which year was the company founded?",
+    "answer_format": "four digits",
+    "notes": "Send the year as four digits, e.g. 2014."
+   }
+  ],
+  "max_wrong_total": 2,
+  "retry_allowed": true,
+  "hints": [],
+  "fail": {
+   "say": "I'm sorry, I could not verify the company. We will write to your registered office.",
+   "outcome": {
+    "outcome": "unverified",
+    "reason": "failed"
+   }
+  },
+  "decline": {
+   "explain_once": "",
+   "asking_why_counts_as_decline": false,
+   "refusals_to_close": 1,
+   "outcome": {
+    "outcome": "unverified",
+    "reason": "refused_check"
+   }
+  },
+  "verified_say": "Thank you."
+ },
+ "debt_statement": {
+  "intro": "Say you are calling about an overdue balance.",
+  "product_wording": {
+   "business_overdraft": "business overdraft",
+   "equipment_lease": "equipment lease ending {lease_suffix}",
+   "trade_credit": "trade credit line"
+  },
+  "state": "For each facility, state the overdue amount and the number of days overdue.",
+  "multi_product_rule": "Name each overdue facility in words with its overdue amount and days overdue."
+ },
+ "calendar": {
+  "business_weekdays": [
+   "Mon",
+   "Tue",
+   "Wed",
+   "Thu",
+   "Fri"
+  ],
+  "holidays": [
+   "2026-10-26",
+   "2026-11-11",
+   "2026-12-24",
+   "2026-12-25",
+   "2026-12-31",
+   "2027-01-01"
+  ],
+  "next_weekday_means": "next occurrence",
+  "this_weekday_means": "next occurrence"
+ },
+ "bands": [
+  {
+   "name": "S1",
+   "days_late_min": 1,
+   "days_late_max": 10,
+   "deadline_business_days_after_today": 0,
+   "deadline_rule": {
+    "type": "end_of_month"
+   },
+   "persuasion_attempts": 1
+  },
+  {
+   "name": "S2",
+   "days_late_min": 11,
+   "days_late_max": 30,
+   "deadline_business_days_after_today": 0,
+   "deadline_rule": {
+    "type": "calendar_days_after_today",
+    "n": 10,
+    "roll": "previous"
+   },
+   "persuasion_attempts": 2
+  },
+  {
+   "name": "S3",
+   "days_late_min": 31,
+   "days_late_max": 60,
+   "deadline_business_days_after_today": 5,
+   "deadline_rule": "",
+   "persuasion_attempts": 1
+  },
+  {
+   "name": "S4",
+   "days_late_min": 61,
+   "days_late_max": 90,
+   "deadline_business_days_after_today": 0,
+   "deadline_rule": {
+    "type": "today"
+   },
+   "persuasion_attempts": 0
+  }
+ ],
+ "date_rules": {
+  "promise_date": "The payment date must be a working day (Mon-Fri, not a closed day) from today up to the latest payment date of the stage. Stage S4: today only.",
+  "weekend_or_holiday": "If the customer names a weekend or closed day that is not after the latest date, offer the working day before it if that is today or later; otherwise offer the next working day.",
+  "vague_period": "If the answer is vague (e.g. 'in a couple of weeks', 'when the client pays us'), ask once for the exact day. If no exact day comes, close the facility without a promise and do not propose a date.",
+  "after_deadline": "Do not accept a date after the latest payment date; tell the contact the latest possible date and ask for a date up to it.",
+  "next_weekday": "'Next <weekday>' and 'this <weekday>' both mean the next occurrence of that weekday after today.",
+  "non_business_day_roll": "previous",
+  "after_deadline_refusal": "persuasion",
+  "vague_fallback": "none"
+ },
+ "amounts": {
+  "floor_by_type": {},
+  "ask_full_first": true,
+  "never_ask_how_much": true,
+  "too_much": "If the contact says the full amount is too much, offer the minimum amount once.",
+  "proposed_in_range": "Accept an amount between the minimum and the full overdue amount.",
+  "below_floor": "Say that amount cannot be accepted and offer the minimum amount once.",
+  "floor_percent_of_past_due": 15,
+  "floor_fixed_amount": 50
+ },
+ "persuasion": {
+  "first_ask": "Can you pay the full overdue amount?",
+  "date_or_amount_is_not_refusal": true,
+  "what_counts_as_refusal": "A plain no, or no answer. A date or an amount the contact offers is never a refusal.",
+  "attempt_1": "Reminder 1: the full overdue amount on the latest payment date (S1, S2, S3).",
+  "attempt_2": "Reminder 2 (S2 only): the minimum amount on the latest payment date.",
+  "exhausted_outcome": {
+   "outcome": "no_arrangement",
+   "reason": "declined"
+  },
+  "do_not_repeat_refused_offer": true,
+  "attempts": [
+   {
+    "n": 1,
+    "amount": "full",
+    "date_rule": {
+     "type": "deadline"
+    },
+    "bands": [
+     "S1",
+     "S2",
+     "S3"
+    ]
+   },
+   {
+    "n": 2,
+    "amount": "floor",
+    "date_rule": {
+     "type": "deadline"
+    },
+    "bands": [
+     "S2"
+    ]
+   }
+  ],
+  "_attempts_doc": "attempts: one entry per persuasion attempt the material defines, in order."
+ },
+ "special_cases": [
+  {
+   "name": "hardship",
+   "trigger": "",
+   "behaviour": "",
+   "transfer_queue": "",
+   "accept_outcome": {
+    "outcome": "",
+    "reason": ""
+   },
+   "decline_outcome": {
+    "outcome": "",
+    "reason": ""
+   },
+   "note_reason": ""
+  },
+  {
+   "name": "already_paid",
+   "trigger": "The contact says 'We already paid'.",
+   "behaviour": "Take no arrangement. Call add_note with reason claims_paid, then close as claims_paid.",
+   "outcome": {
+    "outcome": "claims_paid",
+    "reason": ""
+   },
+   "note_reason": "claims_paid"
+  },
+  {
+   "name": "dispute",
+   "trigger": "The contact says 'This is not our account'.",
+   "behaviour": "Close as no_arrangement / disputed. Add no note.",
+   "outcome": {
+    "outcome": "no_arrangement",
+    "reason": "disputed"
+   },
+   "note_reason": ""
+  },
+  {
+   "name": "restructuring",
+   "trigger": "",
+   "behaviour": "",
+   "transfer_queue": "",
+   "outcome": {
+    "outcome": "",
+    "reason": ""
+   }
+  },
+  {
+   "name": "human",
+   "trigger": "The contact asks for a person.",
+   "behaviour": "Call transfer_to_agent with team account_managers and close as routed / asked_for_person.",
+   "transfer_queue": "account_managers",
+   "outcome": {
+    "outcome": "routed",
+    "reason": "asked_for_person"
+   }
+  },
+  {
+   "name": "refuses_to_talk",
+   "trigger": "",
+   "outcome_after_verification": {
+    "outcome": "",
+    "reason": ""
+   },
+   "outcome_before_verification": {
+    "outcome": "",
+    "reason": ""
+   }
+  },
+  {
+   "name": "unknown_question",
+   "behaviour": ""
+  },
+  {
+   "name": "insolvency",
+   "trigger": "Insolvency, administration or a liquidator is mentioned.",
+   "behaviour": "Take no arrangement. Call transfer_to_agent with team insolvency_unit and close as routed / insolvency.",
+   "transfer_queue": "insolvency_unit",
+   "outcome": {
+    "outcome": "routed",
+    "reason": "insolvency"
+   },
+   "note_reason": ""
+  },
+  {
+   "name": "do_not_call",
+   "trigger": "The contact says 'Stop calling us'.",
+   "behaviour": "Say \"I've noted that.\" Call add_note with reason do_not_call for every overdue facility and close as no_arrangement / do_not_call.",
+   "transfer_queue": "",
+   "outcome": {
+    "outcome": "no_arrangement",
+    "reason": "do_not_call"
+   },
+   "note_reason": "do_not_call"
+  },
+  {
+   "name": "ceased_trading",
+   "trigger": "Someone else answers and says the company has ceased trading.",
+   "behaviour": "Say \"Thank you for letting us know.\" and close as no_contact / ceased_trading.",
+   "transfer_queue": "",
+   "outcome": {
+    "outcome": "no_contact",
+    "reason": "ceased_trading"
+   },
+   "note_reason": ""
+  }
+ ],
+ "forbidden_offers": [
+  "a discount",
+  "a fee waiver",
+  "a payment plan"
+ ],
+ "confirm_record": {
+  "readback": "Read back the facility, the amount and the date, then ask \"Shall I record that?\"",
+  "record_only_after_clear_yes": true,
+  "changed_at_readback": "",
+  "one_promise_per_product": true,
+  "cannot_change_recorded": "",
+  "retry_on_failure": 0,
+  "failure_say": "I'm sorry, I could not record that just now.",
+  "failure_outcome": {
+   "outcome": "no_arrangement",
+   "reason": "system_issue"
+  },
+  "recorded_say": "You'll get an email confirming this arrangement."
+ },
+ "multi_product": {
+  "enabled": true,
+  "ask_all_today_first": true,
+  "order": "highest overdue amount first",
+  "per_product_attempts": true,
+  "one_date_after_a_deadline": "",
+  "one_readback_one_confirmation": false,
+  "note_products_without_promise": true,
+  "note_reasons": [
+   "declined",
+   "do_not_call",
+   "claims_paid"
+  ],
+  "dispute_or_paid_does_not_end_call": true,
+  "transfer_no_notes": true,
+  "promise_failed_twice": "Do not retry a failed create_promise. Say \"I'm sorry, I could not record that just now.\" and close as no_arrangement / system_issue.",
+  "closing": "Close as arrangement if at least one arrangement was recorded; otherwise use the outcome the last applied rule gives."
+ },
+ "closing": {
+  "thank_and_goodbye": true,
+  "farewell": "Thank you for your time. Goodbye.",
+  "after_promise_then_transfer": "",
+  "close_call_rule": "Every call ends with exactly one close_call as the last tool call. Thank the contact and say goodbye first.",
+  "outcome_table": [
+   {
+    "outcome": "arrangement",
+    "reason": "",
+    "when": "at least one arrangement recorded"
+   },
+   {
+    "outcome": "claims_paid",
+    "reason": "",
+    "when": "contact says they already paid (J3)"
+   },
+   {
+    "outcome": "routed",
+    "reason": "insolvency",
+    "when": "insolvency, administration or liquidator mentioned (J1)"
+   },
+   {
+    "outcome": "routed",
+    "reason": "asked_for_person",
+    "when": "contact asks for a person (J5)"
+   },
+   {
+    "outcome": "no_arrangement",
+    "reason": "declined",
+    "when": "reminders used up (H3) or vague date with no exact day (F5)"
+   },
+   {
+    "outcome": "no_arrangement",
+    "reason": "system_issue",
+    "when": "create_promise failed (I2)"
+   },
+   {
+    "outcome": "no_arrangement",
+    "reason": "do_not_call",
+    "when": "contact says stop calling us (J2)"
+   },
+   {
+    "outcome": "no_arrangement",
+    "reason": "disputed",
+    "when": "contact says this is not our account (J4)"
+   },
+   {
+    "outcome": "unverified",
+    "reason": "failed",
+    "when": "two wrong security answers in total (D2)"
+   },
+   {
+    "outcome": "unverified",
+    "reason": "refused_check",
+    "when": "contact refuses to answer the security questions (D3)"
+   },
+   {
+    "outcome": "no_contact",
+    "reason": "unconfirmed",
+    "when": "second unclear answer to the identity question (B3)"
+   },
+   {
+    "outcome": "no_contact",
+    "reason": "callback_booked",
+    "when": "call-back booked with a third party (C2)"
+   },
+   {
+    "outcome": "no_contact",
+    "reason": "no_slot",
+    "when": "no call-back slot today works (C3)"
+   },
+   {
+    "outcome": "no_contact",
+    "reason": "wrong_number",
+    "when": "wrong number or nobody of that name works here (C4)"
+   },
+   {
+    "outcome": "no_contact",
+    "reason": "ceased_trading",
+    "when": "the company has ceased trading (C5)"
+   }
+  ]
+ },
+ "residual_rules": [
+  "Use the call variable now for every date rule, never the real clock.",
+  "Pass customer_id to every tool.",
+  "Call-back: only later today, at least two hours after now, and no later than 18:00; book with schedule_callback.",
+  "If no call-back slot today works, do not book; close as no_contact / no_slot.",
+  "Verification order: company registration number first, then the year the company was founded; send each answer with verify_identity.",
+  "One wrong security answer may be retried; two wrong answers in total end the check (brief overrides the API's three): say we will write to the registered office and close as unverified / failed.",
+  "If the contact refuses to answer the security questions, say exactly \"I understand.\" and close at once as unverified / refused_check. There is no second ask.",
+  "After verification call get_account.",
+  "S1 latest payment date: the last working day of the current month; if today is that day, the last working day of next month.",
+  "S2 latest payment date: 10 calendar days after today; if that is a closed day, the working day before it.",
+  "S3 latest payment date: the 5th working day after today.",
+  "S4 (61-90 days overdue): accepts only the full amount, today; no reminders.",
+  "Minimum amount = the higher of 15 percent of the overdue amount and 50.00, but never more than the overdue amount.",
+  "If the full amount is too much, offer the minimum once. Below the minimum: say it cannot be accepted and offer the minimum once.",
+  "A company can have up to three overdue facilities. Ask once whether all can be paid in full today; if not, handle them one by one, highest overdue amount first. Reminders count per facility.",
+  "A facility without an arrangement gets add_note with reason declined (or do_not_call / claims_paid per J2, J3).",
+  "One arrangement per facility."
+ ],
+ "api": {
+  "_doc": "EXACT property names and enum values copied from the tool API file.",
+  "tools": {
+   "verify_identity": {
+    "customer": "customer_id",
+    "field": "question",
+    "answer": "value",
+    "verified": "correct",
+    "all_verified": "fully_verified",
+    "wrong_left": "attempts_remaining",
+    "hint": ""
+   },
+   "get_account": {
+    "customer": "customer_id",
+    "products": "facilities",
+    "product_id": "facility_id",
+    "type": "facility_type",
+    "past_due": "overdue_amount",
+    "days_late": "overdue_days"
+   },
+   "create_promise": {
+    "customer": "customer_id",
+    "product_id": "facility_id",
+    "amount": "amount_eur",
+    "date": "pay_on"
+   },
+   "add_note": {
+    "customer": "customer_id",
+    "product_id": "facility_id",
+    "reason": "note_code"
+   },
+   "schedule_callback": {
+    "customer": "customer_id",
+    "date": "callback_date",
+    "time": "callback_time"
+   },
+   "transfer_to_agent": {
+    "customer": "customer_id",
+    "queue": "team"
+   },
+   "close_call": {
+    "customer": "customer_id",
+    "outcome": "result",
+    "reason": "result_reason"
+   }
+  },
+  "promise_outcome": "arrangement",
+  "transfer_outcome": "routed",
+  "call_vars": {
+   "customer_id": "customer_id",
+   "now": "now"
+  }
+ }
+}

@@ -63,6 +63,11 @@ def resolve_weekday(today, wd, qualifier):
                 d = d + datetime.timedelta(days=1)
             return d
         return mon + datetime.timedelta(days=7 + wd)
+    if qualifier == 'last':
+        d = today - datetime.timedelta(days=1)
+        while d.weekday() != wd:
+            d = d - datetime.timedelta(days=1)
+        return d
     if qualifier == 'this':
         if 'occurrence' in this_rule:
             d = today
@@ -88,10 +93,35 @@ def parse_day_text(text, today):
     s = re.sub(r'\s+', ' ', s).strip()
     if not s or s == '-':
         return None, 'unknown'
+    _num = r'(?:a|an|\d+|(?:twenty|thirty|forty|fifty|sixty)(?:[- ](?:one|two|three|four|five|six|seven|eight|nine))?|' + '|'.join(reversed(_ONES[1:])) + r')'
+    m = re.search(r'\b(' + _num + r')[- ](day|days|week|weeks|fortnight)\b(?: time)?( ago| from today| from now| from tomorrow| later| on)?', s)
+    if m:
+        # 'in two weeks', 'three days from now', 'a week from today': an offset from today, never a day of the month
+        n = 1 if m.group(1) in ('a', 'an') else word_number(m.group(1))
+        tail = (m.group(3) or '').strip()
+        lead_in = re.search(r'\bin\s+(?:about |around )?$', s[:m.start()]) is not None
+        if n is not None and 0 < n <= 60 and (tail or lead_in):
+            unit = 14 if m.group(2) == 'fortnight' else (7 if m.group(2).startswith('week') else 1)
+            sign = -1 if tail == 'ago' else 1
+            base = today + datetime.timedelta(days=1) if tail == 'from tomorrow' else today
+            if tail != 'on':
+                return base + datetime.timedelta(days=sign * n * unit), 'ok'
+    s_flat = s.replace("'", '').replace('\u2019', '')
+    for name, md in (('christmas eve', (12, 24)), ('christmas day', (12, 25)), ('christmas', (12, 25)), ('boxing day', (12, 26)), ('new years eve', (12, 31)), ('new years day', (1, 1))):
+        if name in s_flat:
+            try:
+                d = datetime.date(today.year, md[0], md[1])
+            except Exception:
+                return None, 'unknown'
+            if d < today - datetime.timedelta(days=30):
+                d = datetime.date(today.year + 1, md[0], md[1])
+            return d, 'ok'
     if 'day after tomorrow' in s:
         return today + datetime.timedelta(days=2), 'ok'
     if 'tomorrow' in s:
         return today + datetime.timedelta(days=1), 'ok'
+    if re.search(r'\byesterday\b', s):
+        return today - datetime.timedelta(days=1), 'ok'
     if re.search(r'\btoday\b|\bnow\b|right away', s):
         return today, 'ok'
     m = re.search(r'(\d\d\d\d)-(\d\d)-(\d\d)', s)
@@ -133,8 +163,8 @@ def parse_day_text(text, today):
     for i, t in enumerate(toks):
         if _weekday_index(t) is not None:
             wd = _weekday_index(t)
-            if i > 0 and toks[i - 1] in ('this', 'next', 'coming'):
-                qual = 'next' if toks[i - 1] == 'next' else 'this'
+            if i > 0 and toks[i - 1] in ('this', 'next', 'coming', 'last', 'past'):
+                qual = 'next' if toks[i - 1] == 'next' else ('last' if toks[i - 1] in ('last', 'past') else ('' if toks[i - 1] == 'coming' else 'this'))
             break
     day = None
     year = None
@@ -190,6 +220,21 @@ def parse_day_text(text, today):
                 if cand_d >= today:
                     d = cand_d
                     break
+            if wd is not None and (d is None or d.weekday() != wd):
+                # 'Monday the 19th': the weekday picks the month; a past match in this month is a past day
+                match = None
+                for k in range(-1, 3):
+                    mo = today.month + k
+                    yy = y + (mo - 1) // 12
+                    mo = (mo - 1) % 12 + 1
+                    try:
+                        cand_d = datetime.date(yy, mo, day)
+                    except Exception:
+                        continue
+                    if cand_d.weekday() == wd and (match is None or abs((cand_d - today).days) < abs((match - today).days)):
+                        match = cand_d
+                if match is not None:
+                    d = match
             if d is None:
                 return None, 'unknown'
             return d, 'ok'

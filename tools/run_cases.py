@@ -51,7 +51,7 @@ def main():
     a = ap.parse_args()
     cases = [c for c in json.load(open(a.cases)) if (not a.brief or c["brief"] == a.brief) and (not a.only or c["id"] in a.only.split(","))]
     ident = {c["id"]: {"identity": c["identity"]} for c in cases}
-    store = ROOT / ".personas.json"; ids = json.load(open(store)) if store.exists() else {}
+    store = pathlib.Path(os.environ.get("FREYA_PERSONAS_FILE") or ROOT / ".personas.json"); ids = json.load(open(store)) if store.exists() else {}
     # a persona is recreated whenever its text changes, so an edited case never runs with a stale customer
     spec = {c["id"]: persona_for(c, ident[c["id"]], a.style) for c in cases}
     key = {i: i + ":" + hashlib.sha1(json.dumps(p, sort_keys=True).encode()).hexdigest()[:10] for i, p in spec.items()}

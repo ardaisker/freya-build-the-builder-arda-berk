@@ -77,6 +77,7 @@
     "decline": {
       "explain_once": "what to explain the first time they decline",
       "asking_why_counts_as_decline": true,
+      "refusals_to_close": "number: the how-many-th refusal of the security check closes the call (1 = the first refusal closes; 2 = explain once, the second closes)",
       "outcome": {
         "outcome": "enum",
         "reason": "enum"
@@ -112,8 +113,9 @@
       "days_late_min": 1,
       "days_late_max": 7,
       "deadline_business_days_after_today": 12,
-      "deadline_rule": "ONLY if the deadline is not 'the Nth business day after today': a date rule object: {\"type\": \"today\" | \"deadline\" | \"next_business_day\" | \"business_days_after_today\" (with n) | \"calendar_days_after_today\" (with n and roll: next|previous) | \"last_business_day_of_week\" (with week: 0 this week, 1 next week; if_today_use_next_week: true|false) | \"end_of_month\" | \"text\" (with \"text\": the bank's rule in its own words), \"n\": number}. Use \"text\" ONLY when none of the other types gives exactly the day the rule means in every case; a rule the other types express exactly MUST use them. Never approximate a rule.",
-      "persuasion_attempts": 1
+      "deadline_rule": "ONLY if the deadline is not 'the Nth business day after today': a date rule object: {\"type\": \"today\" | \"deadline\" | \"next_business_day\" | \"business_days_after_today\" (with n) | \"calendar_days_after_today\" (with n and roll: next|previous) | \"last_business_day_of_week\" (with week: 0 this week, 1 next week; if_today_use_next_week: true|false) | \"end_of_month\" (if_today_use_next_month: true|false) | \"text\" (with \"text\": the bank's rule in its own words), \"n\": number}. Use \"text\" ONLY when none of the other types gives exactly the day the rule means in every case; a rule the other types express exactly MUST use them. Never approximate a rule.",
+      "persuasion_attempts": 1,
+      "floor": "\"full\" when this band accepts only the full past-due amount (no lower amount); otherwise \"\""
     }
   ],
   "date_rules": {
@@ -137,7 +139,8 @@
     "below_floor": "what to do when the customer proposes less than the floor",
     "floor_percent_of_past_due": "number (0 if the floor is not a percentage of the past-due amount)",
     "floor_fixed_amount": "number (0 if the floor is not a fixed amount)",
-    "floor_rule_text": "ONLY if the lowest acceptable amount is none of the three forms above (a field of the product, a percentage of the past-due amount, a fixed amount): the bank's rule in its own words. Otherwise \"\"."
+    "floor_rule_text": "ONLY if the lowest acceptable amount is none of the three forms above (a field of the product, a percentage of the past-due amount, a fixed amount): the bank's rule in its own words. Otherwise \"\".",
+    "floor_combine": "max | min: when the floor is given as both a percentage and a fixed amount ('X percent or Y, whichever is higher' = max). The floor is never above the past-due amount."
   },
   "persuasion": {
     "first_ask": "the exact spoken first question about paying (spoken words, not an instruction); if the material gives no wording, write the natural question that asks for what the material says to ask first",
@@ -154,7 +157,7 @@
       {
         "n": 1,
         "amount": "full | floor | full_or_floor_if_too_much (full amount, or the floor when the customer already said the full amount is too much)",
-        "date_rule": "a date rule object: {\"type\": \"today\" | \"deadline\" | \"next_business_day\" | \"business_days_after_today\" (with n) | \"calendar_days_after_today\" (with n and roll: next|previous) | \"last_business_day_of_week\" (with week: 0 this week, 1 next week; if_today_use_next_week: true|false) | \"end_of_month\" | \"text\" (with \"text\": the bank's rule in its own words), \"n\": number}. Use \"text\" ONLY when none of the other types gives exactly the day the rule means in every case; a rule the other types express exactly MUST use them. Never approximate a rule.",
+        "date_rule": "a date rule object: {\"type\": \"today\" | \"deadline\" | \"next_business_day\" | \"business_days_after_today\" (with n) | \"calendar_days_after_today\" (with n and roll: next|previous) | \"last_business_day_of_week\" (with week: 0 this week, 1 next week; if_today_use_next_week: true|false) | \"end_of_month\" (if_today_use_next_month: true|false) | \"text\" (with \"text\": the bank's rule in its own words), \"n\": number}. Use \"text\" ONLY when none of the other types gives exactly the day the rule means in every case; a rule the other types express exactly MUST use them. Never approximate a rule.",
         "bands": "\"all\" or a list of band names that get this attempt"
       }
     ],

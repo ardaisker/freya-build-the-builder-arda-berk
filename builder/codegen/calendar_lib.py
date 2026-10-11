@@ -159,19 +159,26 @@ def _num(x, default=0.0):
     except Exception:
         return default
 
-def floor_of(p):
+def floor_of(p, band=None):
     am = SPEC.get('amounts') or dict()
+    if isinstance(band, dict) and str(band.get('floor') or '').strip().lower() == 'full':
+        return p.get('past_due')
     fb = am.get('floor_by_type') or dict()
     field = fb.get(str(p.get('type')))
     if field and p.get(field) is not None:
         return p.get(field)
+    due = _num(p.get('past_due'))
     pct = _num(am.get('floor_percent_of_past_due'))
-    if pct > 0:
-        return round(_num(p.get('past_due')) * pct / 100.0, 2)
     fixed = _num(am.get('floor_fixed_amount'))
+    parts = []
+    if pct > 0:
+        parts.append(round(due * pct / 100.0, 2))
     if fixed > 0:
-        return min(fixed, _num(p.get('past_due'), fixed))
-    return p.get('past_due')
+        parts.append(fixed)
+    if not parts:
+        return p.get('past_due')
+    v = min(parts) if str(am.get('floor_combine') or 'max').strip().lower() == 'min' else max(parts)
+    return min(v, due) if due > 0 else v
 
 def rule_date(rule, today, deadline):
     """A date from a date-rule object of the spec (see spec_schema.json). None if the rule is unknown."""
@@ -214,7 +221,7 @@ def rule_date(rule, today, deadline):
                 if is_business(d):
                     break
                 d = d - one
-            if d >= today:
+            if d > today or (d == today and not r.get('if_today_use_next_month')):
                 break
             y = nxt.year
             m = nxt.month
@@ -243,10 +250,12 @@ def deadline_text(band):
     except Exception:
         return ''
 
-def floor_text(p):
+def floor_text(p, band=None):
     """Not empty when the lowest acceptable amount cannot be computed here: the bank's wording of the rule."""
     try:
         am = SPEC.get('amounts') or dict()
+        if isinstance(band, dict) and str(band.get('floor') or '').strip().lower() == 'full':
+            return ''
         fb = am.get('floor_by_type') or dict()
         field = fb.get(str(p.get('type')))
         if field and p.get(field) is not None:
@@ -345,12 +354,12 @@ def product_facts(today):
             dl = today + datetime.timedelta(days=120)       # no computed limit: nothing in code is tied to it
             f['deadline_text'] = soft
         f['deadline'] = dl.isoformat()
-        ft = floor_text(p)
+        ft = floor_text(p, b)
         if ft:
             f['floor_text'] = ft
             f['floor'] = 0
         else:
-            f['floor'] = floor_of(p)
+            f['floor'] = floor_of(p, b)
         f['attempts'] = int(_num(b.get('persuasion_attempts'), 1))
         f['offers'] = offers_for(b, f['attempts'], today, dl, soft)
         out.append(f)
