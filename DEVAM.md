@@ -59,3 +59,12 @@ Sonra: `submission/hidden-*.workflow.json` + trace'ler commit + push; `submissio
 
 ## Arda'da bekleyenler
 1. Paz 20:00: gizli brief + API dosyalarını `briefs/` altına koy, bana haber ver. 2. Teslim e-posta adresini ilet. 3. Repoyu public yap, formu gönder. 4. İsteğe bağlı: Freya destek kanalına platform kesintilerini bildir.
+
+## 11 Eki 04:40 eki (gece 3)
+
+- Ölçüm (n4): Brief A 10/10 × 5, Brief B 3/3 × 5, 42 uç durum düz 41/42 × 2, in_words 41, asks_back 37, corrects 35, pieces 35.
+- Taze okuma provası (n5): builder brief'ten sıfırdan iki ajan üretti (`out/fresh1`, `out/fresh2`; ajanlar f72c8e8c… ve 885e672c…). fresh2: A 10/10 × 3, B 3/3 × 3. fresh1: A'da bir platform takılması, B'de PUB-12 bir koşuda ikinci teklifi atladı (model dalgalanması; kural sıkılaştırıldı).
+- Yeni: `notes_backstop` + `backstop_note` düğümleri (çok ürünlü aramada notsuz kalan ürüne kapanıştan önce not). Ders: paralel araç çağrıları `notes_log`/`promises_log` satırlarını ezer; ürün başına işaret kullan (`noted_<id>`, `tried_<id>`). Post-hook isteği göremez; ürün kimliği pre-hook'ta saklanır.
+- Geri arama: pencere dışı gün ya da saat tek başına "başarısız öneri" sayılır; "tonight" bugündür.
+- Koşan kuyruk: `results/n6-*` (B × 8, A × 3 iki ajanda, uç durumlar düz × 2 + corrects/asks_back/pieces).
+- Kredi 04:31'de 334; yedek 100.
