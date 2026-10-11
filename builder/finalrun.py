@@ -17,14 +17,14 @@ def flat(o, p=""):
     out = {}
     if isinstance(o, dict):
         for k, v in o.items():
-            if not str(k).startswith("_"):
+            if not str(k).startswith("_") and k not in ("residual_rules", "forbidden_offers"):
                 out.update(flat(v, p + "." + str(k)))
     elif isinstance(o, list):
         for i, v in enumerate(o):
             key = str(v.get("name") or v.get("field") or v.get("n") or v.get("outcome") or i) if isinstance(v, dict) else str(i)
             out.update(flat(v, p + "[" + key + "]"))
-    elif not isinstance(o, str) or len(o) <= 48:
-        out[p] = o
+    elif not isinstance(o, str) or (o and " " not in o.strip() and len(o) <= 48):
+        out[p] = o                      # numbers, booleans, identifiers, dates and times; sentences are wording, not rules
     return out
 
 
