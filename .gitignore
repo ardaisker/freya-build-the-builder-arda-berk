@@ -10,3 +10,7 @@ out/
 runs/
 .pytest_cache/
 .DS_Store
+.freya-final-*.json
+.freya-compiled.json
+.personas-custom.json
+.agents/

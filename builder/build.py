@@ -197,7 +197,7 @@ def main():
     trace.section("3 VALIDATE + SAVE on Freya")
     r = freya.validate_workflow(slot, wf)
     trace.log(f"dry-run: {r}")
-    state_file = str(ROOT / ".freya-agents.json")
+    state_file = os.environ.get("FREYA_STATE_FILE") or str(ROOT / ".freya-agents.json")   # parallel runs keep separate state files
     saved = freya.save_workflow(slot, wf, state_file=state_file)
     trace.created("workflow", workflow_id=saved["workflow_id"], agent_id=saved["agent_id"], version=saved.get("version", 1), nodes=len(wf["nodes"]))
     json.dump(saved, open(out_dir / "ids.json", "w"))
