@@ -106,3 +106,19 @@ Plan dosyası: `~/.claude/plans/inherited-swimming-horizon.md` (fazlar, eşikler
   Eski tahsilat yolu aynen duruyor (tool API dosyasında yedi araç varsa o çalışır).
 - Uydurma vaka: `fixtures/case-parcel/` + `fixtures/case-parcel.spec.json`; testler `tests/test_case.py`.
 - Koda final vakasından hiçbir şey yazılmaz; mock (`mock/`) vakaya özeldir ve builder'ın parçası değildir.
+
+## 11 Eki 21:32: final koşuları
+
+- Kod donduruldu: `47216b9` (builder) / `c665144` (+README, caseeval). Mock yayında ve 616/616 doğru.
+- Paket tam: `briefs/final/` (21:10'da Drive'a eklenen `sources/meetings/2026-10-10-follow-up-session-transcript.txt` dahil;
+  dosyalar link ile açık, `curl -L "https://drive.google.com/uc?export=download&id=<id>"` çalışıyor).
+- Final adayları: `final-a`, `final-b`, `final-c` (izler `traces/final-<x>-*.log`, çıktı `traces/final-<x>.out`,
+  dışa aktarım `submission/final-<x>.workflow.json`, durum `.freya-final-<x>.json`). Komut:
+  `python3 builder/build.py briefs/final --tool-url https://freya-bank-mock.ardaegeisker.workers.dev --max-test-rounds 3 --slot final-a`
+- Önceki tam klasör koşusu: `final-r5` (eski kod: look-alike ayrımı yok). r4: 11/12.
+- Ortak değerlendirme seti: `out/eval/final-eval.json` (alt ajan yazıyor); koşucu:
+  `python3 builder/caseeval.py <agent_id> out/eval/final-eval.json --out results/eval-<x>.json`
+- Seçim: ortak sette en çok geçen aday. Sonra: `submission/final.workflow.json` + `traces/final.log` kopyala,
+  `submission.json` yaz (team arda-berk, repo https://github.com/ardaisker/freya-build-the-builder-arda-berk, commit,
+  run_command, mock_url), commit + push; Arda repoyu public yapar ve Yavuz'un mailine 3 ekle yanıt verir (23:00).
+- Claude: 21:31'de haftalık %72, 5 saatlik %41. Yeni builder koşusu başlatma (3 final koşusu yeter).
