@@ -134,6 +134,12 @@ def soft_dimensions(res, cases, verdicts, min_cases=2) -> dict:
         if len(ids) < min_cases or not any(str((verdicts.get(i) or {}).get("wrong")) == "spec" for i in ids):
             continue
         quotes = []
+        # the judge's reason quotes the one sentence that decides; the tester's rule field often bundles several rules
+        for i in sorted(ids):
+            vd = verdicts.get(i) or {}
+            q = str(vd.get("why") or "").strip()[:300] if str(vd.get("wrong")) == "spec" else ""
+            if q and q not in quotes:
+                quotes.append(q)
         for i in sorted(ids):
             q = rules.get(i, "")[:300]
             if q and q not in quotes:
