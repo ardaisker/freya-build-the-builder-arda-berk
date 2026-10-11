@@ -509,3 +509,78 @@ def test_offsets_named_days_and_coming_weekday():
         w = dict(v, customer_date_text=text)
         run("resolve_date", w)
         assert w["resolved_date"] == day, (text, w["resolved_date"])
+
+
+def test_floor_percent_per_product_type_and_text_in_a_field_name():
+    spec = dict(SPEC, amounts=dict(SPEC["amounts"], floor_by_type={}, floor_percent_of_past_due=0, floor_fixed_amount=0,
+                                   floor_percent_by_type={"car_loan": 30, "credit_card": 50}))
+    def floor(sp, ty, due):
+        v = {"now": NOW, "get_account_response.data.products": json.dumps([{"product_id": "p1", "type": ty, "past_due": due, "days_late": 14, "instalment_amount": 400}])}
+        g = {"vars": v}
+        exec(snippet("facts", libs=("calendar_lib", "dateparse_lib"), SPEC=sp), g)
+        return float(json.loads(v["pf_json"])[0]["floor"])
+    assert floor(spec, "car_loan", 1000) == 300 and floor(spec, "credit_card", 1000) == 500
+    # a sentence where a field name belongs (an extraction slip) still gives the percentage
+    slip = dict(spec, amounts=dict(spec["amounts"], floor_percent_by_type={}, floor_by_type={"car_loan": "30 percent of overdue_amount"}))
+    assert floor(slip, "car_loan", 1000) == 300
+
+
+def test_no_security_check_builds_without_identity_exits():
+    from compile import compile_workflow
+    from lint import lint
+    api = json.load(open(ROOT / "fixtures" / "variant.openapi.json"))
+    spec = json.load(open(ROOT / "fixtures" / "variant.spec.json"))
+    spec["identity"] = dict(spec["identity"], questions=[])
+    wf = compile_workflow(spec, api)
+    assert lint(wf) == []
+    assert "set_declined" not in wf["nodes"] and "end_failed" not in wf["nodes"]
+    assert wf["nodes"]["mark_reached"]["transitions"][0]["target_node"] == "get_account"
+
+
+def test_fallback_moves_optional_sections_into_the_prompt_rules():
+    from fallback import compile_with_fallback, degrade
+    spec = {"special_cases": [{"name": "x"}], "multi_product": {"a": 1}, "third_party": {"b": 2}, "residual_rules": ["r1"], "identity": {"questions": [1]}}
+    d1 = degrade(spec, 1)
+    assert d1["special_cases"] == [] and d1["multi_product"] == {"a": 1} and any(r.startswith("[special_cases]") for r in d1["residual_rules"]) and d1["residual_rules"][0] == "r1"
+    assert d1["identity"] == spec["identity"] and spec["special_cases"]            # the core stays, the input is not changed
+    calls = []
+    def build(s):
+        calls.append(len(s["special_cases"]))
+        if s["special_cases"] or s["multi_product"]:
+            raise RuntimeError("lint failed: x")
+        return "wf"
+    wf, used, level = compile_with_fallback(spec, build, log=lambda *_: None)
+    assert (wf, level, calls) == ("wf", 2, [1, 0, 0]) and used["third_party"] == {"b": 2}
+    def never(s):
+        raise ValueError("no tool")
+    try:
+        compile_with_fallback(spec, never, log=lambda *_: None); assert False
+    except ValueError as e:
+        assert str(e) == "no tool"
+
+
+def test_a_rule_the_code_cannot_express_goes_to_the_model():
+    import copy, oracle
+    # the oracle marks a dimension soft only when several situations still disagree and the judge blamed the spec
+    res = {"O1": ["floor: code 400, test 120"], "O2": ["floor: code 300, test 150"], "O3": ["deadline: code 2026-10-29, test 2026-10-28"], "O4": []}
+    cases = [{"id": "O1", "rule": "30 percent for credit cards"}, {"id": "O2", "rule": "50 percent for overdrafts"}, {"id": "O3", "rule": "within 7 days"}, {"id": "O4"}]
+    soft = oracle.soft_dimensions(res, cases, {"O1": {"wrong": "spec"}, "O3": {"wrong": "spec"}})
+    assert soft == {"floor": ["30 percent for credit cards", "50 percent for overdrafts"]}
+    assert oracle.soft_dimensions(res, cases, {"O1": {"wrong": "test"}, "O2": {"wrong": "unclear"}}) == {}
+    # a soft dimension: the computed value is a hint, the quoted rule is in the facts, the guard no longer blocks on it
+    s = copy.deepcopy(SPEC)
+    s["soft"] = {"floor": ["Smallest promise: 30 percent of the overdue amount."], "deadline": ["Pay within 7 calendar days."]}
+    p = [{"product_id": "p1", "type": "car_loan", "past_due": 1250, "days_late": 14, "instalment_amount": 400}]
+    v = {"now": NOW, "get_account_response.data.products": json.dumps(p)}
+    code = snippet("facts", libs=("calendar_lib", "dateparse_lib"), SPEC=s)
+    assert "{" not in code and "}" not in code
+    exec(code, {"vars": v})
+    assert "BANK RULE on amounts" in v["facts"] and "30 percent" in v["facts"] and "only a hint" in v["facts"]
+    assert v["g_floor_p1"] == "0"
+    assert "2026-11-20" in v["g_days_p1"] and "2026-10-17" not in v["g_days_p1"]      # far days allowed, weekends still out
+    v["customer_date_text"] = "next Friday"
+    exec(snippet("resolve_date", libs=("calendar_lib", "dateparse_lib"), SPEC=s), {"vars": v})
+    assert "BANK RULE on dates" in v["date_verdict"] and "7 calendar days" in v["date_verdict"]
+    # without soft nothing changes
+    hard = facts(p)
+    assert "BANK RULE" not in hard["facts"] and hard["g_floor_p1"] == "400" and "2026-11-20" not in hard["g_days_p1"]

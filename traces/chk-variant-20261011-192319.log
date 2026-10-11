@@ -1,0 +1,13 @@
+2026-10-11T19:23:19+0300 (+    0.0s)  == BUILD START slot=chk-variant briefs=['briefs/brief-a.md'] api=fixtures/variant.openapi.json budget=27.0min ==
+2026-10-11T19:23:19+0300 (+    0.0s)  command: builder/build.py briefs/brief-a.md fixtures/variant.openapi.json --no-freya --no-oracle --spec fixtures/variant.spec.json --slot chk-variant
+2026-10-11T19:23:19+0300 (+    0.3s)  model backend=sdk model=claude-opus-5-5
+2026-10-11T19:23:19+0300 (+    0.3s)  == 1 EXTRACT: brief -> policy spec ==
+2026-10-11T19:23:19+0300 (+    0.3s)  spec loaded from fixtures/variant.spec.json (no model call)
+2026-10-11T19:23:19+0300 (+    0.3s)  spec written: /Users/ranaserpil/kezo/btb-merge/out/chk-variant/spec.json  identity questions=3 bands=3 holidays=4 special_cases=9 residual_rules=35 multi_product=True
+2026-10-11T19:23:19+0300 (+    0.3s)  rules computed in code: all
+2026-10-11T19:23:19+0300 (+    0.3s)  == 2 COMPILE (v1): spec -> workflow ==
+2026-10-11T19:23:19+0300 (+    0.3s)  workflow: 42 nodes, 35 tools, lint problems=0
+2026-10-11T19:23:19+0300 (+    0.3s)  == 2b SELF-CHECK: code steps run locally on made-up customers ==
+2026-10-11T19:23:19+0300 (+    0.4s)  TEST self-check code steps: 9 / 9 product type x band combinations computed deadline, floor, offers and outcome; callback check: ok
+2026-10-11T19:23:19+0300 (+    0.4s)  TEST self-check outcomes: every outcome the workflow can record is a value of the tool API
+2026-10-11T19:23:19+0300 (+    0.4s)  END status=offline-ok total=0s

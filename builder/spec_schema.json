@@ -137,6 +137,9 @@
     "too_much": "what to do when the full amount is too much",
     "proposed_in_range": "what to do when the customer proposes an amount between floor and full",
     "below_floor": "what to do when the customer proposes less than the floor",
+    "floor_percent_by_type": {
+      "<product type enum value>": "number: the floor of this product type as a percentage of its past-due amount (only when the material gives a different percentage per product type; otherwise leave this object empty)"
+    },
     "floor_percent_of_past_due": "number (0 if the floor is not a percentage of the past-due amount)",
     "floor_fixed_amount": "number (0 if the floor is not a fixed amount)",
     "floor_rule_text": "ONLY if the lowest acceptable amount is none of the three forms above (a field of the product, a percentage of the past-due amount, a fixed amount): the bank's rule in its own words. Otherwise \"\".",

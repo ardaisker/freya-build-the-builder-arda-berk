@@ -1,0 +1,13 @@
+2026-10-11T19:23:19+0300 (+    0.0s)  == BUILD START slot=chk-raw-bank-material briefs=['briefs/brief-a.md'] api=fixtures/raw-bank-material.openapi.json budget=27.0min ==
+2026-10-11T19:23:19+0300 (+    0.0s)  command: builder/build.py briefs/brief-a.md fixtures/raw-bank-material.openapi.json --no-freya --no-oracle --spec fixtures/raw-bank-material.spec.json --slot chk-raw-bank-material
+2026-10-11T19:23:20+0300 (+    0.3s)  model backend=sdk model=claude-opus-5-5
+2026-10-11T19:23:20+0300 (+    0.3s)  == 1 EXTRACT: brief -> policy spec ==
+2026-10-11T19:23:20+0300 (+    0.3s)  spec loaded from fixtures/raw-bank-material.spec.json (no model call)
+2026-10-11T19:23:20+0300 (+    0.3s)  spec written: /Users/ranaserpil/kezo/btb-merge/out/chk-raw-bank-material/spec.json  identity questions=2 bands=2 holidays=6 special_cases=8 residual_rules=37 multi_product=False
+2026-10-11T19:23:20+0300 (+    0.3s)  rules computed in code: all
+2026-10-11T19:23:20+0300 (+    0.3s)  == 2 COMPILE (v1): spec -> workflow ==
+2026-10-11T19:23:20+0300 (+    0.3s)  workflow: 40 nodes, 33 tools, lint problems=0
+2026-10-11T19:23:20+0300 (+    0.3s)  == 2b SELF-CHECK: code steps run locally on made-up customers ==
+2026-10-11T19:23:20+0300 (+    0.4s)  TEST self-check code steps: 6 / 6 product type x band combinations computed deadline, floor, offers and outcome; callback check: ok
+2026-10-11T19:23:20+0300 (+    0.4s)  TEST self-check outcomes: every outcome the workflow can record is a value of the tool API
+2026-10-11T19:23:20+0300 (+    0.4s)  END status=offline-ok total=0s

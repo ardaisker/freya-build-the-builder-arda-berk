@@ -27,6 +27,7 @@ from extract import audit, extract, validate  # noqa: E402
 from compile import compile_workflow  # noqa: E402
 from lint import lint  # noqa: E402
 from patch import patch_spec  # noqa: E402
+from fallback import compile_with_fallback  # noqa: E402
 
 
 def classify(paths):
@@ -171,22 +172,32 @@ def main():
     trace.log("rules computed in code: all" if not in_words else "rules left in the bank's words for the phone agent (not computed in code): " + "; ".join(in_words))
 
     # 2. compile + lint
+    built_with = {}
+
+    def compile_checked(s):
+        wf = compile_workflow(s, openapi)
+        problems = lint(wf)
+        if problems:
+            raise RuntimeError("lint failed: " + "; ".join(problems[:5]))
+        return wf
+
     def build_and_check(spec, tag):
         trace.section(f"2 COMPILE ({tag}): spec -> workflow")
-        wf = compile_workflow(spec, openapi)
+        wf, used, level = compile_with_fallback(spec, compile_checked, log=trace.log)
+        if level:
+            trace.log(f"WARNING: the spec did not compile; built at fallback level {level} (optional sections kept as prompt rules only)")
+        built_with["spec"] = used
         problems = lint(wf)
         n_tools = sum(len(n.get("tools", [])) + len(n.get("pre_actions", [])) for n in wf["nodes"].values()) + len(wf.get("tools", []))
         trace.log(f"workflow: {len(wf['nodes'])} nodes, {n_tools} tools, lint problems={len(problems)}")
         for pr in problems:
             trace.log("  lint: " + pr)
-        if problems:
-            raise RuntimeError("lint failed: " + "; ".join(problems[:5]))
         (out_dir / f"workflow-{tag}.json").write_text(json.dumps(wf, indent=1, ensure_ascii=False))
         return wf
 
     wf = build_and_check(spec, "v1")
     trace.section("2b SELF-CHECK: code steps run locally on made-up customers")
-    self_check(spec, openapi, wf, trace)
+    self_check(built_with["spec"], openapi, wf, trace)
     if a.no_freya:
         trace.end("offline-ok"); return
 

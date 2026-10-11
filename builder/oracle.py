@@ -115,6 +115,33 @@ def _run_case(spec, openapi, case):
     return got, bad
 
 
+DIMENSIONS = {"deadline": "deadline", "floor": "floor", "attempts": "offers", "offers": "offers", "date": "deadline"}
+
+
+def soft_dimensions(res, cases, verdicts, min_cases=2) -> dict:
+    """{dimension: [quotes]} for every dimension (deadline, floor, offers) where at least `min_cases` situations still
+    disagree after the oracle rounds AND the judge said the spec is wrong for at least one of them: a rule the rule
+    language could not express. There the phone agent follows the quoted rule instead of trusting the computed value."""
+    by_dim = {}
+    for cid, probs in res.items():
+        for x in probs or []:
+            dim = DIMENSIONS.get(x.split(":")[0].split(" ")[0])
+            if dim:
+                by_dim.setdefault(dim, set()).add(cid)
+    rules = {str(c.get("id")): str(c.get("rule") or "").strip() for c in cases}
+    soft = {}
+    for dim, ids in by_dim.items():
+        if len(ids) < min_cases or not any(str((verdicts.get(i) or {}).get("wrong")) == "spec" for i in ids):
+            continue
+        quotes = []
+        for i in sorted(ids):
+            q = rules.get(i, "")[:300]
+            if q and q not in quotes:
+                quotes.append(q)
+        soft[dim] = quotes[:3]
+    return soft
+
+
 def run_cases(spec, openapi, cases) -> dict:
     """{case id: [problems]} for every case; [] = agrees."""
     res = {}
@@ -135,6 +162,9 @@ def check(llm, spec, material, openapi, log=print, rounds=2):
         cases = generate_cases(llm, material, openapi)
     except Exception as e:
         log("oracle skipped: " + str(e)[:160]); return spec, "skipped"
+    if not cases:
+        log("WARNING: the oracle wrote no test situation: the spec was NOT cross-checked against the material")
+        return spec, "0 / 0 independent situations (spec not cross-checked)"
     res = run_cases(spec, openapi, cases)
     broken = [k for k, b in res.items() if b and b[0].startswith("case could not run")]
     cases = [c for c in cases if str(c.get("id")) not in broken]     # a malformed test says nothing about the spec
@@ -143,6 +173,7 @@ def check(llm, spec, material, openapi, log=print, rounds=2):
     for k, b in res.items():
         for x in b:
             log(f"  oracle {k}: {x}")
+    verdicts = {}
     for rnd in range(1, rounds + 1):
         bad = {k: b for k, b in res.items() if b}
         if not bad:
@@ -163,6 +194,7 @@ def check(llm, spec, material, openapi, log=print, rounds=2):
             log("oracle judge failed: " + str(e)[:160]); break
         for vd in out.get("verdicts") or []:
             log(f"  verdict {vd.get('id')}: {vd.get('wrong')} | {str(vd.get('why'))[:160]}")
+            verdicts[str(vd.get("id"))] = vd
         patches = (out.get("patches") or [])[:8]
         if not patches:
             break
@@ -176,7 +208,8 @@ def check(llm, spec, material, openapi, log=print, rounds=2):
         new = run_cases(trial, openapi, cases)
         fixed = [k for k in bad if not new.get(k)]
         broke = [k for k, b in res.items() if not b and new.get(k)]
-        n_old, n_new = len(bad), sum(1 for b in new.values() if b)
+        # count single disagreements, not cases: a case wrong on both its deadline and its floor still improves when one is fixed
+        n_old, n_new = sum(len(b) for b in bad.values()), sum(len(b) for b in new.values())
         ok = n_new < n_old and not broke and len(validate(trial, openapi)) <= before
         for pt in patches:
             log(f"  oracle patch {'KEPT' if ok else 'rejected'}: {pt.get('path')} = {json.dumps(pt.get('value'))[:120]} | {str(pt.get('evidence'))[:120]}")
@@ -184,5 +217,12 @@ def check(llm, spec, material, openapi, log=print, rounds=2):
         if not ok:
             break
         spec, res = trial, new
+    soft = soft_dimensions(res, cases, verdicts)
+    if soft:
+        spec = copy.deepcopy(spec)
+        spec["soft"] = soft
+        log("SOFT: the code cannot express the material's rule for " + ", ".join(sorted(soft)) + ": the computed value becomes a hint, the quoted bank rule decides, and the code no longer blocks a promise on it")
     n_bad = sum(1 for b in res.values() if b)
+    if res and n_bad:
+        log(f"WARNING: {n_bad} of {len(res)} independent situations still disagree with the code after the oracle rounds: the spec may compute a deadline or floor the material does not allow")
     return spec, f"{len(res) - n_bad} / {len(res)} independent situations agree with the code"

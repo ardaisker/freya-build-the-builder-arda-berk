@@ -1,0 +1,13 @@
+2026-10-11T19:23:20+0300 (+    0.0s)  == BUILD START slot=chk-rehearsal-biz briefs=['briefs/brief-a.md'] api=fixtures/rehearsal-biz.openapi.json budget=27.0min ==
+2026-10-11T19:23:20+0300 (+    0.0s)  command: builder/build.py briefs/brief-a.md fixtures/rehearsal-biz.openapi.json --no-freya --no-oracle --spec fixtures/rehearsal-biz.spec.json --slot chk-rehearsal-biz
+2026-10-11T19:23:21+0300 (+    0.3s)  model backend=sdk model=claude-opus-5-5
+2026-10-11T19:23:21+0300 (+    0.3s)  == 1 EXTRACT: brief -> policy spec ==
+2026-10-11T19:23:21+0300 (+    0.3s)  spec loaded from fixtures/rehearsal-biz.spec.json (no model call)
+2026-10-11T19:23:21+0300 (+    0.3s)  spec written: /Users/ranaserpil/kezo/btb-merge/out/chk-rehearsal-biz/spec.json  identity questions=2 bands=4 holidays=6 special_cases=10 residual_rules=17 multi_product=True
+2026-10-11T19:23:21+0300 (+    0.3s)  rules computed in code: all
+2026-10-11T19:23:21+0300 (+    0.3s)  == 2 COMPILE (v1): spec -> workflow ==
+2026-10-11T19:23:21+0300 (+    0.3s)  workflow: 40 nodes, 33 tools, lint problems=0
+2026-10-11T19:23:21+0300 (+    0.3s)  == 2b SELF-CHECK: code steps run locally on made-up customers ==
+2026-10-11T19:23:21+0300 (+    0.5s)  TEST self-check code steps: 12 / 12 product type x band combinations computed deadline, floor, offers and outcome; callback check: ok
+2026-10-11T19:23:21+0300 (+    0.5s)  TEST self-check outcomes: every outcome the workflow can record is a value of the tool API
+2026-10-11T19:23:21+0300 (+    0.5s)  END status=offline-ok total=0s

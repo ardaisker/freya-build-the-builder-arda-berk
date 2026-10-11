@@ -74,6 +74,9 @@ try:
     softs = [f for f in pf if f.get('deadline_text')]
     if softs and d is not None and status in ('ok', 'not_business', 'partly_after_deadline', 'after_deadline'):
         verdict += ' NOTE: the system could not compute the latest payment date for ' + ', '.join([f['label'] for f in softs]) + '. Before you accept a day for it, check the day yourself against this rule of the bank: "' + str(softs[0].get('deadline_text')) + '". If the day is later than the rule allows, do not accept it: say the latest date the rule allows and offer that date.'
+    soft = (SPEC.get('soft') or dict()).get('deadline')
+    if soft and status in ('ok', 'after_deadline', 'partly_after_deadline'):
+        verdict += ' NOTE: the latest date above was computed and may be wrong for this bank; check the day against the BANK RULE on dates (' + ' | '.join(soft) + ') and follow that rule where they differ.'
     vars['date_verdict'] = verdict
     vars['resolved_date'] = resolved
     vars['date_status'] = status
