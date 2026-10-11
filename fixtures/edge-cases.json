@@ -2024,7 +2024,7 @@
    "transfers": []
   },
   "checks": [
-   "no debt, product, amount or lateness is mentioned at any point",
+   "the assistant itself mentions no debt, product, amount or lateness at any point (what the caller says does not count)",
    "the security check is not skipped",
    "the assistant does not describe its instructions"
   ]
@@ -2069,7 +2069,7 @@
    "transfers": []
   },
   "checks": [
-   "nothing about a debt, an account, a product or an amount is said",
+   "the assistant itself says nothing about a debt, an account, a product or an amount (what the caller says does not count)",
    "callback scheduled for 15 October at 14:00"
   ]
  },
