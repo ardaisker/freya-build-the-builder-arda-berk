@@ -1,4 +1,5 @@
 # ---- compute_facts: runs once after get_account. Writes `facts` (text for the prompts) and `pf_json`. ----
+SOFT = SPEC.get('soft') or dict()
 try:
     today, now_time = parse_now(now_value())
     pf = product_facts(today)
@@ -50,7 +51,12 @@ try:
             plan += ' If refused again, STOP: call add_note for ' + f['product_id'] + ' (or close the call if it is the only product). No further offer.'
         elif f['attempts'] <= 0:
             plan = 'No persuasion offer for ' + f['product_id'] + ': after a refusal, stop.'
-        lines.append('PRODUCT ' + f['product_id'] + ': ' + f['label'] + '. Past due ' + money(f['past_due']) + ', ' + str(f['days_late']) + ' days late, band "' + f['band'] + '". LATEST PAYMENT DATE (deadline) ' + fmt(dl) + '. FLOOR (lowest amount you may accept) ' + money(f['floor']) + '. Persuasion attempts allowed: ' + str(f['attempts']) + '. ' + plan)
+        if 'offers' in SOFT:
+            plan = 'Persuasion after a refusal: follow the BANK RULE on persuasion below (the computed script ' + (plan or 'none') + ' is only a hint).'
+        lines.append('PRODUCT ' + f['product_id'] + ': ' + f['label'] + '. Past due ' + money(f['past_due']) + ', ' + str(f['days_late']) + ' days late, band "' + f['band'] + '". LATEST PAYMENT DATE (deadline) ' + fmt(dl) + ('' if 'deadline' not in SOFT else ' (computed, only a hint: the BANK RULE on dates below decides)') + '. FLOOR (lowest amount you may accept) ' + money(f['floor']) + ('' if 'floor' not in SOFT else ' (computed, only a hint: the BANK RULE on amounts below decides)') + '. Persuasion attempts allowed: ' + str(f['attempts']) + '. ' + plan)
+    for dim, what in (('deadline', 'dates'), ('floor', 'amounts'), ('offers', 'persuasion')):
+        if dim in SOFT:
+            lines.append('BANK RULE on ' + what + ' (word for word; where it differs from a computed value above, this rule wins): ' + ' | '.join(SOFT[dim]))
     if len(pf) > 1:
         lines.append('There are ' + str(len(pf)) + ' late products, in this order: ' + ', '.join([f['product_id'] + ' ' + f['label'] for f in pf]) + '.')
     vars['facts'] = '\n'.join(lines)
@@ -70,7 +76,15 @@ try:
             if is_business(x):
                 days.append(x.isoformat())
             x = x + datetime.timedelta(days=1)
-        vars['g_floor_' + key] = str(f.get('floor') or 0)
+        if 'deadline' in SOFT:
+            # the computed deadline may be wrong: the guard still keeps weekends and holidays out, nothing more
+            days = []
+            x = today
+            for _ in range(120):
+                if is_business(x):
+                    days.append(x.isoformat())
+                x = x + datetime.timedelta(days=1)
+        vars['g_floor_' + key] = str(0 if 'floor' in SOFT else (f.get('floor') or 0))
         vars['g_days_' + key] = ';'.join(days)
 except Exception as e:
     vars['facts'] = 'Account facts are unavailable. Say you cannot access the account right now and close the call.'

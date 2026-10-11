@@ -69,6 +69,9 @@ try:
                 status = 'after_deadline'
             else:
                 status = 'ok'
+    soft = (SPEC.get('soft') or dict()).get('deadline')
+    if soft and status in ('ok', 'after_deadline', 'partly_after_deadline'):
+        verdict += ' NOTE: the latest date above was computed and may be wrong for this bank; check the day against the BANK RULE on dates (' + ' | '.join(soft) + ') and follow that rule where they differ.'
     vars['date_verdict'] = verdict
     vars['resolved_date'] = resolved
     vars['date_status'] = status
