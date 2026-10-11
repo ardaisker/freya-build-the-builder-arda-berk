@@ -77,3 +77,17 @@ Sonra: `submission/hidden-*.workflow.json` + trace'ler commit + push; `submissio
 - Platform notu: 05:52'de bir simülasyon "running" kaldı ve yuvayı iki saat kilitledi; `resilient._clear_stale` artık 25 dakikadan eski takılı simülasyonu kapatıyor. "conversation: no verdict" hakem arızasıdır, ajan kusuru değil.
 - Bundan sonra yalnız çökme düzeltmesi. Gizli brief'ten hiçbir kural, değer ya da isim koda yazılmaz.
 - Kredi 08:42'de 299; yedek 100.
+
+## 11 Eki 19:30: FİNAL PLANI (onaylı) — önce bunu oku
+
+Plan dosyası: `~/.claude/plans/inherited-swimming-horizon.md` (fazlar, eşikler, ajan rolleri). Özet:
+
+- `main` = Arda + Berk dallarının tamamı (f701037 ve sonrası): güvenlik katmanı, söz engeli, not yedeği, kuralı sözle bırakma (okuma adımı "text" der ya da oracle bir boyutu "ipucu" yapar), oracle adımı, derleme yedeği, bağlantı/504 yeniden denemeleri. 31 test; `builder/golden.py compare out/golden-pre-reveal.json` farksız olmalı.
+- Sözler yine mesaj başına bir araçla kaydediliyor (17:05'te ölçülen davranış). Aynı mesajda kaydetme denendi, zor çok ürünlü müşteriyi 12 koşuda 2 kez bozdu, geri alındı.
+- Son pratik ölçüm (19:26, birleşme öncesi kod, aynı prompt): Brief B 3/3 × 4, Brief A 10/10. Kuralı sözle bırakılmış ajan Brief A'da 9/10.
+- **Açılıştan sonra kural:** yalnız genel hata düzeltmesi; gizli brief'ten koda/prompt'a hiçbir kural, değer, isim yok; elle spec/ajan düzeltmesi yok. Her commit'ten önce `python3 builder/leakcheck.py --base pre-reveal <gizli dosyalar>`.
+- **Final komutları:**
+  - `python3 builder/finalrun.py --name hidden-1 --runs 3 briefs/<brief1>.md briefs/<api1>.json` (aynısı hidden-2). Tablo: `out/final/<ad>-compare.md`; izler `traces/final-<ad>-r<i>.out` ve `traces/<slot>-<zaman>.log`; ajan dosyaları `submission/<slot>.workflow.json`.
+  - Pratik kapı: `python3 -u builder/gate.py add78035-6e92-4483-83b8-86c3c4f7a0f0 --brief B --reps 3` / `--brief A --reps 2` (önce `builder/savetest.py` ile yayınla).
+- **Claude eşikleri (haftalık):** %85 Opus alt ajan yok, %90 alt ajan yok, %94 yeniden koşu yok, %98 asla. 19:26'da %68; dört builder koşusu haftalıkta 1 puandan az tuttu. 5 saatlik pencere 19:30'da sıfırlandı.
+- Zaman: 20:00 açılış → 20:30 güvenli teslim commit'i → 22:00 kod dondurma → 22:30 son koşular seçildi → 22:45 teslim (Arda: repo public + form).
