@@ -1,6 +1,6 @@
 """Retries for the Freya API client. The platform sometimes answers 502/503/504 for a moment; a builder run must not
-die of that. Reads are retried on any of the three; writes only on 503 (the request was not processed), so nothing is
-ever created twice."""
+die of that. Reads, updates and creates are retried on any of the three; starting a simulation only on 503 (the request
+was not processed), so the single simulation slot is never taken twice."""
 import sys, time
 
 
@@ -17,7 +17,10 @@ def install(log=print, tries=6):
             except RuntimeError as e:
                 msg = str(e)
                 code = next((c for c in ("502", "503", "504") if f"-> {c}:" in msg), None)
-                retry = code is not None and (method == "GET" or code == "503")
+                # reads and updates are safe to repeat. A create that timed out may leave an unused duplicate behind, which is
+                # harmless and far better than a build that dies. Only starting a simulation is never repeated on 502/504:
+                # a second one would block the workspace's single slot.
+                retry = code is not None and (method in ("GET", "PUT") or code == "503" or "/simulations" not in path)
                 if not retry or attempt == tries - 1:
                     raise
                 wait = min(60, 5 * (attempt + 1) ** 2)
