@@ -14,6 +14,7 @@ import os
 import pathlib
 import re
 import subprocess
+import tempfile
 import sys
 import time
 
@@ -28,6 +29,19 @@ from compile import compile_workflow  # noqa: E402
 from lint import lint  # noqa: E402
 from patch import patch_spec  # noqa: E402
 from fallback import compile_with_fallback  # noqa: E402
+
+
+def yaml_to_json(path):
+    """Write a JSON copy of a YAML tool API next to the outputs and return its path (installs PyYAML if needed)."""
+    try:
+        import yaml
+    except ImportError:
+        import subprocess
+        subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "pyyaml"], check=False)
+        import yaml
+    out = pathlib.Path(tempfile.gettempdir()) / (pathlib.Path(path).stem + ".from-yaml.json")
+    out.write_text(json.dumps(yaml.safe_load(pathlib.Path(path).read_text(errors="replace")), indent=1, default=str))
+    return str(out)
 
 
 def classify(paths):
@@ -46,7 +60,8 @@ def classify(paths):
         try:
             text = pathlib.Path(f).read_text(errors="replace")
             if f.lower().endswith((".yaml", ".yml")) and "paths:" in text and "openapi" in text:
-                raise SystemExit("the tool API file is YAML: convert it to JSON first (python3 -c 'import yaml,json,sys; json.dump(yaml.safe_load(open(sys.argv[1])), open(sys.argv[2], \"w\"))' in.yaml out.json)")
+                f = yaml_to_json(f)          # a YAML tool API is converted, never a manual step
+                text = pathlib.Path(f).read_text(errors="replace")
             doc = json.loads(text)
             is_api = isinstance(doc, dict) and isinstance(doc.get("paths"), dict)
         except (ValueError, OSError):
@@ -145,7 +160,7 @@ def main():
         spec = json.load(open(a.spec))
         trace.log(f"spec loaded from {a.spec} (no model call)")
     else:
-        material = [(pathlib.Path(b).name, open(b).read()) for b in briefs]
+        material = [(pathlib.Path(b).name, pathlib.Path(b).read_text(errors="replace")) for b in briefs]
         spec = extract(llm, material, openapi)
         if not a.no_audit:
             trace.section("1b AUDIT: spec checked against the material")
@@ -246,7 +261,7 @@ def main():
                 trace.log("no time for a patch round"); break
             trace.section(f"6 PATCH round {rnd}: failures -> spec")
             failures = collect_failures(res, trace)
-            new_spec = patch_spec(llm, spec, failures, briefs_text=[(pathlib.Path(b).name, open(b).read()) for b in briefs], openapi=openapi)
+            new_spec = patch_spec(llm, spec, failures, briefs_text=[(pathlib.Path(b).name, pathlib.Path(b).read_text(errors="replace")) for b in briefs], openapi=openapi)
             problems = validate(new_spec, openapi)
             if problems:
                 trace.log("patched spec rejected: " + "; ".join(problems)); break
