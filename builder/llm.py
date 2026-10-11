@@ -14,6 +14,8 @@ import subprocess
 import time
 
 MODEL = os.environ.get("BUILDER_MODEL", "claude-opus-5-5")
+# when the main model is out of quota (a usage or session limit), the rest of the build runs on this one instead of stopping
+FALLBACK_MODEL = os.environ.get("BUILDER_FALLBACK_MODEL", "claude-sonnet-5-5")
 
 
 def strip_fences(raw: str) -> str:
@@ -93,6 +95,11 @@ class LLM:
             if self.trace:
                 self.trace.log(f"MODEL CALL retry {attempt + 1}: {str(last)[:120] if last else 'empty answer'}")
             time.sleep(10 * (attempt + 1))
+        if not text.strip() and last is not None and model != FALLBACK_MODEL and re.search(r"limit|quota|overloaded|rate", str(last), re.I):
+            if self.trace:
+                self.trace.log(f"MODEL CALL {model} unavailable ({str(last)[:80]}): switching to {FALLBACK_MODEL} for the rest of the build")
+            self.model = FALLBACK_MODEL
+            return self.ask(purpose, system, user, FALLBACK_MODEL)
         if not text.strip() and last is not None:
             raise last
         took = time.time() - t0

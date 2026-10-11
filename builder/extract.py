@@ -184,7 +184,12 @@ def extract(llm, briefs: list[tuple[str, str]], openapi: dict) -> dict:
     if problems:
         fix = ("The spec you produced has these problems:\n- " + "\n- ".join(problems) +
                "\nReturn the corrected full JSON object. Keep everything else unchanged.\n\nYour spec was:\n" + json.dumps(spec, indent=1))
-        spec = llm.ask_json("fix spec problems: " + "; ".join(problems)[:200], SYSTEM, user_prompt(briefs, openapi) + "\n\n" + fix, retries=1)
+        try:
+            fixed = llm.ask_json("fix spec problems: " + "; ".join(problems)[:200], SYSTEM, user_prompt(briefs, openapi) + "\n\n" + fix, retries=1)
+            if isinstance(fixed, dict) and len(validate(fixed, openapi)) <= len(problems):
+                spec = fixed
+        except Exception as ex:    # the first spec still builds (the compiler has a fallback for every problem): never lose the build here
+            print("spec fix skipped: " + str(ex)[:160], flush=True)
         problems = validate(spec, openapi)
         for pr in problems:        # the compiler has a fallback for every one of these: warn, do not stop the build
             print("spec warning: " + pr, flush=True)
