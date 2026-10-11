@@ -628,7 +628,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         "            vars['promised_' + ''.join([ch if ch.isalnum() else '_' for ch in pid])] = '1'\n"
         "            vars['call_outcome'] = '" + A["promise_outcome"] + "'\n"
         "            vars['call_reason'] = ''\n"
-        "            d['what_to_do_next'] = 'The promise is recorded. Tell the customer it is recorded" + (" and say exactly: " + recorded_say if recorded_say else "") + ". Then continue with the next product if any; otherwise stop and wait for the customer to reply (do not say goodbye yet). In your NEXT message, answer anything they ask, then thank them, say goodbye and call transition_to_finalize.'\n"
+        "            d['what_to_do_next'] = 'This promise is recorded. If the customer already confirmed a promise for another product that is not recorded yet, call create_promise for it NOW, before you say anything. When every confirmed promise is recorded: tell the customer it is recorded" + (" and say exactly: " + recorded_say if recorded_say else "") + ". Then continue with the next product if any; otherwise stop and wait for the customer to reply (do not say goodbye yet). In your NEXT message, answer anything they ask, then thank them, say goodbye and call transition_to_finalize.'\n"
         "        else:\n"
         "            err = ''\n"
         "            if isinstance(d, dict):\n"
