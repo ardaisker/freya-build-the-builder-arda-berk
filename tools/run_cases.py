@@ -30,6 +30,10 @@ STYLES = {
     "talkative": "HOW YOU TALK: you talk a lot. Before most answers you add one or two sentences about your day, the traffic or how busy work is. Once in the call you mention that your cousin's wedding is on the 30th. It has nothing to do with any payment, and you never offer it as a payment day.",
     "asks_back": "HOW YOU TALK: twice in the call, before you answer, you ask a short question back, like 'why do you need that?' or 'which account is this about?'. Whatever the caller replies, you then give your answer.",
     "in_words": "HOW YOU TALK: you say every amount and every date in words and never in digits, like 'four hundred and fifty-five' and 'the twenty-second of October'. Postcodes, years and other codes you say digit by digit.",
+    # our harder practice styles (not the kit's): every kit style at once, hesitation, a change of mind
+    "mixed": "HOW YOU TALK: you combine several habits. You add a sentence about your day before some answers. You give long numbers and dates in two parts (the first half, then the rest in your next turn). You say amounts and dates in words, never digits. Once you correct yourself ('the 21st, sorry, the 20th'). Once you ask a short question back before answering. The facts in your script stay exactly the same.",
+    "hesitant": "HOW YOU TALK: you hesitate. You often start with 'um', 'let me think' or 'hang on, let me check', and once you say 'sorry, can you repeat that?'. You answer every question in the end, with the facts of your script.",
+    "changes_mind": "HOW YOU TALK: once in the call, right after you agree to a day or an amount, you change your mind in your next turn to the day or amount your script says (if your script gives one), like 'actually, wait, make it Friday instead'. You end with exactly what your script says.",
 }
 
 def persona_for(case, ident, style=None):
