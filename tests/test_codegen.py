@@ -369,3 +369,37 @@ def test_security_layer():
     exec(pre, {"vars": {}, "config": cfg}); assert "amount" in cfg["body"]
     sp = wf["system_prompt"]
     assert "SECURITY" in sp and "PRIVACY" in sp
+
+
+def test_yesterday_is_past():
+    v = facts([{"product_id": "p1", "type": "car_loan", "past_due": 1250, "days_late": 14, "instalment_amount": 400}])
+    v["customer_date_text"] = "yesterday"
+    run("resolve_date", v)
+    assert v["date_status"] == "past" and v["resolved_date"] == "2026-10-13"
+
+
+def test_oracle_runs_cases_locally_and_spots_a_wrong_spec():
+    import copy, oracle
+    api = json.load(open(ROOT / "tools" / "openapi.json"))
+    case = {"id": "T1", "now": NOW, "product": {"product_id": "p1", "type": "car_loan", "past_due": 1250, "days_late": 14, "instalment_amount": 400},
+            "expect": {"deadline": "2026-10-23", "floor": 400, "attempts": 2, "offers": [{"amount": 1250, "date": "2026-10-16"}, {"amount": 400, "date": "2026-10-23"}]},
+            "date_text": "Monday the 26th", "expect_date": {"status": "not_business", "date": "2026-10-26", "offer": "2026-10-27"}}
+    assert oracle.run_cases(SPEC, api, [case]) == {"T1": []}
+    bad = copy.deepcopy(SPEC)
+    bad["calendar"]["holidays"] = [h for h in bad["calendar"]["holidays"] if h != "2026-10-26"]
+    problems = oracle.run_cases(bad, api, [case])["T1"]
+    assert any("deadline" in p for p in problems) and any("Monday the 26th" in p for p in problems)
+
+
+def test_counts_come_from_the_spec():
+    import copy
+    from compile import compile_workflow
+    api = json.load(open(ROOT / "tools" / "openapi.json"))
+    s = copy.deepcopy(SPEC)
+    s["identity"]["decline"]["refusals_to_close"] = 1
+    s["opening"]["max_asks"] = 3
+    s["confirm_record"]["retry_on_failure"] = 2
+    wf = json.dumps(compile_workflow(s, api))
+    assert "for the FIRST time" in wf and "SECOND real refusal" not in wf and "These questions protect your account" not in wf
+    assert "after the third ask" in wf and "after three asks" in wf
+    assert "fails three times" in wf

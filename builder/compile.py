@@ -177,6 +177,22 @@ def system_prompt(spec: dict) -> str:
     return "\n".join(lines)
 
 
+ORDINAL = {1: "FIRST", 2: "SECOND", 3: "THIRD", 4: "FOURTH", 5: "FIFTH"}
+TIMES = {1: "once", 2: "twice", 3: "three times", 4: "four times", 5: "five times"}
+
+
+def as_count(value, default, lo=1, hi=5):
+    try:
+        return max(lo, min(hi, int(float(value))))
+    except (TypeError, ValueError):
+        return default
+
+
+def decline_refusals(spec):
+    """How many refusals of the security check close the call (the brief's number; 2 when it is silent)."""
+    return as_count(((spec.get("identity") or {}).get("decline") or {}).get("refusals_to_close"), 2)
+
+
 def opening_asks(spec):
     """How many times the agent may ask who is on the line; 0 when the spec does not say."""
     try:
@@ -249,10 +265,10 @@ def identity_prompt(spec):
     if d:
         lines.append("If the customer does not want to answer: " + (d.get("explain_once") or "explain once that the questions protect their account.") +
                      (" Asking what the call is about instead of answering counts as declining." if d.get("asking_why_counts_as_decline") else "") +
-                     " On the SECOND refusal, say that you cannot continue without the security check, say goodbye, and in the same message call transition_to_set_declined. Do not call it on the first refusal.")
+                     " On the " + ORDINAL[decline_refusals(spec)] + " refusal, say that you cannot continue without the security check, say goodbye, and in the same message call transition_to_set_declined." + (" Do not call it on an earlier refusal." if decline_refusals(spec) > 1 else ""))
     lines += ["If the customer gives only part of a number or date, ask for the rest before calling the tool.",
               "Do not say why you are calling and do not mention any account, product or amount in this step. If asked, say you can explain after the security check.",
-              "When the tool result says both questions passed, say only: \"" + (i.get("verified_say") or "Thank you, that's verified.") + "\""]
+              "When the tool result says all security questions passed, say only: \"" + (i.get("verified_say") or "Thank you, that's verified.") + "\""]
     return "\n".join(lines)
 
 
@@ -271,9 +287,10 @@ def mp_settings(spec, tools):
     if not brief_has_rules:
         mp = {}          # the brief is silent on several products: use the generic defaults in full
     mp["enabled"] = brief_has_rules or ("add_note" in tools)
+    tries = as_count(int(as_count((spec.get("confirm_record") or {}).get("retry_on_failure"), 1, lo=0)) + 1, 2)
     for k, v in MP_DEFAULTS.items():
         if not mp.get(k):
-            mp[k] = v
+            mp[k] = v.replace("fails twice", "fails " + TIMES[tries])
     for k in ("ask_all_today_first", "per_product_attempts", "one_readback_one_confirmation", "note_products_without_promise", "dispute_or_paid_does_not_end_call", "transfer_no_notes"):
         if k not in mp:
             mp[k] = True
@@ -481,8 +498,8 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
         "transitions": [
             tr("mark_reached", "the customer confirmed their identity", cond_eq("who_answered", "customer")),
             tr("third_party", "someone else answered", cond_eq("who_answered", "third_party")),
-            {"target_node": "set_unclear", "description": "The person did not confirm being the customer after the second ask (answers like hello, go ahead, who is this).", "is_tool_call": True,
-             "condition": {"operator": "matches_intent", "description": "still unclear who is on the line after two asks"}},
+            {"target_node": "set_unclear", "description": "The person did not confirm being the customer after the " + ORDINAL[opening_asks(spec) or 2].lower() + " ask (answers like hello, go ahead, who is this).", "is_tool_call": True,
+             "condition": {"operator": "matches_intent", "description": "still unclear who is on the line after " + TIMES[opening_asks(spec) or 2].replace("once", "one ask").replace("twice", "two asks").replace(" times", " asks")}},
         ],
     }
     # every closing outcome comes from the spec; where the brief is silent, the nearest rule of the same family is used
@@ -543,9 +560,10 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
     hint_actions = {h.get("hint"): h.get("action") for h in idn.get("hints") or []}
     verified_say = (idn.get("verified_say") or "Thank you, that's verified.").replace("'", "")
     d = idn.get("decline") or {}
-    decline_rule = ("If the customer does not want to answer or asks what the call is about instead of answering: say once, in these words, 'These questions protect your account.' then ask the question again. (" + (d.get("explain_once") or "explain once that the questions protect their account") + ")" +
+    nref = decline_refusals(spec)
+    decline_rule = (("If the customer does not want to answer or asks what the call is about instead of answering: say once, in these words, 'These questions protect your account.' then ask the question again. (" + (d.get("explain_once") or "explain once that the questions protect their account") + ")" if nref > 1 else "") +
                     (" Asking what the call is about instead of answering counts as declining." if d.get("asking_why_counts_as_decline") else "") +
-                    " A short question back such as 'why do you need that?' or 'which account is this about?' is NOT a refusal: answer it in one sentence (the questions protect the account; you can explain after the check) and ask the question again. On the SECOND real refusal, say that you cannot continue without the security check, say goodbye, and in the same message call transition_to_set_declined. Never call it on a first refusal and never when the customer gave an answer.")
+                    " A short question back such as 'why do you need that?' or 'which account is this about?' is NOT a refusal: answer it in one sentence (the questions protect the account; you can explain after the check) and ask the question again. On the " + ORDINAL[nref] + " real refusal, say that you cannot continue without the security check, say goodbye, and in the same message call transition_to_set_declined. Never call it " + ("on a first refusal and never " if nref == 2 else "on an earlier refusal and never " if nref > 2 else "") + "when the customer gave an answer.")
     fail_o = first_set((idn.get("fail") or {}).get("outcome"), (idn.get("decline") or {}).get("outcome"), exh_o)
     decl_o = first_set((idn.get("decline") or {}).get("outcome"), fail_o)
     for i, q in enumerate(qs):
@@ -585,8 +603,8 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
                 tr("set_failed", "too many wrong answers", {"logic": "or", "conditions": [
                     {"variable": "id_state", "operator": "equals", "operand": "failed"}]}),
             ] + ([] if is_last else [tr(nxt, "this question passed", cond_eq("id_q_done", str(q.get("field"))))]) + [
-                {"target_node": "set_declined", "description": "ONLY when the customer has refused the security check for the SECOND time (refused to answer again, asked again what the call is about instead of answering, or said again that they do not want to talk).", "is_tool_call": True,
-                 "condition": {"operator": "matches_intent", "description": "The customer declined the security check for the second time"}},
+                {"target_node": "set_declined", "description": "ONLY when the customer has refused the security check for the " + ORDINAL[nref] + " time (refused to answer" + (" again, asked again" if nref > 1 else ", asked") + " what the call is about instead of answering, or said" + (" again" if nref > 1 else "") + " that they do not want to talk).", "is_tool_call": True,
+                 "condition": {"operator": "matches_intent", "description": "The customer declined the security check for the " + ORDINAL[nref].lower() + " time"}},
             ],
         }
     # the right person is on the line: from here an abandoned call is a declined check, no longer "not reached"

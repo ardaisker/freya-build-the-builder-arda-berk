@@ -120,6 +120,7 @@ def main():
     ap.add_argument("--slot", default="")
     ap.add_argument("--no-freya", action="store_true", help="stop after lint (offline)")
     ap.add_argument("--no-audit", action="store_true", help="skip the second model pass that checks the spec against the brief")
+    ap.add_argument("--no-oracle", action="store_true", help="skip the independent test situations that check the code steps against the brief")
     a = ap.parse_args()
     t_start = time.time()
     deadline = t_start + a.budget_min * 60
@@ -148,6 +149,11 @@ def main():
         if not a.no_audit:
             trace.section("1b AUDIT: spec checked against the material")
             spec = audit(llm, spec, material, openapi, log=trace.log)
+        if not a.no_oracle:
+            trace.section("1c ORACLE: independent test situations from the material, run on the code steps")
+            import oracle
+            spec, summary = oracle.check(llm, spec, material, openapi, log=trace.log)
+            trace.test("oracle (local, no Freya)", summary)
     (out_dir / "spec.json").write_text(json.dumps(spec, indent=1, ensure_ascii=False))
     trace.log(f"spec written: {out_dir / 'spec.json'}  identity questions={len(spec.get('identity', {}).get('questions', []))} bands={len(spec.get('bands', []))} holidays={len(spec.get('calendar', {}).get('holidays', []))} special_cases={len(spec.get('special_cases', []))} residual_rules={len(spec.get('residual_rules', []))} multi_product={spec.get('multi_product', {}).get('enabled')}")
 

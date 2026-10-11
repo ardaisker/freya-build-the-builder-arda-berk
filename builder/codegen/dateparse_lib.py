@@ -92,6 +92,8 @@ def parse_day_text(text, today):
         return today + datetime.timedelta(days=2), 'ok'
     if 'tomorrow' in s:
         return today + datetime.timedelta(days=1), 'ok'
+    if re.search(r'\byesterday\b', s):
+        return today - datetime.timedelta(days=1), 'ok'
     if re.search(r'\btoday\b|\bnow\b|right away', s):
         return today, 'ok'
     m = re.search(r'(\d\d\d\d)-(\d\d)-(\d\d)', s)

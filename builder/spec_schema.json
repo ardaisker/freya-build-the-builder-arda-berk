@@ -77,6 +77,7 @@
     "decline": {
       "explain_once": "what to explain the first time they decline",
       "asking_why_counts_as_decline": true,
+      "refusals_to_close": "number: the how-many-th refusal of the security check closes the call (1 = the first refusal closes; 2 = explain once, the second closes)",
       "outcome": {
         "outcome": "enum",
         "reason": "enum"
