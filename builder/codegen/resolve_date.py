@@ -36,7 +36,7 @@ try:
                 if is_business(x) and x >= today:
                     nb = x
             why = 'a bank holiday' if is_holiday(d) else 'not a business day'
-            verdict = 'DATE CHECK: "' + text + '" = ' + fmt(d) + '. That is ' + why + '. Do not accept it. Offer the nearest allowed business day, ' + fmt(nb) + '.'
+            verdict = 'DATE CHECK: "' + text + '" = ' + fmt(d) + '. That is ' + why + '. Do not accept it. Offer exactly ' + fmt(nb) + ' (the nearest allowed business day) and no other day: say that ' + fmt(d) + ' is ' + why + ' and ask whether they can pay on ' + fmt(nb) + '.'
             late = [f for f in pf if nb > datetime.date.fromisoformat(f['deadline'])]
             if late:
                 verdict += ' But for ' + ', '.join([f['label'] + ' (' + f['product_id'] + ')' for f in late]) + ' the latest allowed date is ' + ', '.join([fmt(datetime.date.fromisoformat(f['deadline'])) for f in late]) + ': offer that date for it instead.'

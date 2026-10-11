@@ -315,7 +315,7 @@ def negotiate_prompt(spec, tools):
         if c.get("transfer_queue"):
             txt += f" To transfer, call transfer_to_agent with queue \"{c['transfer_queue']}\"" + (" only if the customer accepts" if name == "hardship" else "") + ", then say goodbye."
             if name != "hardship":
-                txt += " This request comes first, even when it arrives in the same message as a payment offer: from that moment do not read back, confirm or record any promise that is not already recorded."
+                txt += " This request comes first, even when it arrives in the same message as a payment offer: from that moment do not ask about, read back, confirm or record any promise that is not already recorded. Your very next message is the transfer itself: saying you will transfer is not a transfer, call transfer_to_agent in that same message."
 
         if name == "hardship":
             if re.search(r"no (persuasion|reminder|attempt|pressure)|without (persua|press)|not (try to )?persuade", str(c.get("behaviour") or ""), re.I):
@@ -666,7 +666,7 @@ def compile_workflow(spec: dict, openapi: dict) -> dict:
                 {"name": "dispute_flag", "type": "string", "enum_values": ["dispute"], "min_confidence": 0.6,
                  "description": "dispute: the customer says the debt is not theirs, they never had this product, or the product was closed or paid off in the past. Otherwise leave empty."},
                 {"name": "customer_date_text", "type": "string", "min_confidence": 0.5,
-                 "description": "A payment day the customer named in their LAST message, copied exactly as they said it (for example: this Friday, Monday the 26th, 6 November, the week after next, tomorrow). Leave empty if the last message names no day, or if the message ends with a correction that was cut off ('sorry,', 'I mean'). Never fill it from earlier messages."},
+                 "description": "A payment day the customer named in their LAST message, copied exactly as they said it (for example: this Friday, Monday the 26th, 6 November, the week after next, tomorrow). Leave empty if the last message names no day, or if the message ends with a correction that was cut off ('sorry,', 'I mean'). Never fill it from earlier messages, with one exception: if the customer named a week earlier ('next week', 'the week after next') and now names only a weekday, write both together (for example 'next week Thursday')."},
             ],
             "tools": ntools,
             "transitions": [
